@@ -39,7 +39,29 @@ $env:AIWEB_CONSOLE = "1"
 go run .
 ```
 
-双击 `yks-tool.exe` 即可运行，无需额外文件。首次启动会将内嵌的 `onnxruntime.dll` 解压到用户缓存目录。
+双击 `yks-tool.exe` 即可运行，无需额外文件。首次启动会将内嵌的 ONNX Runtime 解压到用户缓存目录。
+
+### 3. macOS 打包（须在 Mac 上执行）
+
+```bash
+chmod +x scripts/build-darwin.sh scripts/download-deps-darwin.sh
+./scripts/build-darwin.sh
+# 产物：
+#   build/yks-tool-darwin-arm64  （Apple Silicon）
+#   build/yks-tool-darwin-amd64  （Intel Mac）
+```
+
+需先有 `embeddata/*.onnx`（可在 Windows 跑 `download-deps.ps1` 后拷贝，或在 Mac 上导出）。脚本会下载各架构 `libonnxruntime.dylib` 并分别打入对应二进制。
+
+## 产物对照
+
+| 平台 | 产物 | 内嵌原生库 |
+|------|------|------------|
+| Windows x64 | `build/yks-tool.exe` | `onnxruntime.dll` |
+| macOS arm64 | `build/yks-tool-darwin-arm64` | ARM64 `libonnxruntime.dylib` |
+| macOS amd64 | `build/yks-tool-darwin-amd64` | x86_64 `libonnxruntime.dylib` |
+
+一套源码，**各平台单独编译**；不可用一个 exe 跨 Win/Mac。
 
 ## API 摘要
 
@@ -80,10 +102,15 @@ aiWeb/
 ├── server.go
 ├── handler.go
 ├── detector.go          # AI 识别（单文件）
+├── assets_embed_common.go
+├── assets_embed_windows.go
+├── assets_embed_darwin_arm64.go   # build tag: darwin && arm64
+├── assets_embed_darwin_amd64.go   # build tag: darwin && amd64
 ├── versioninfo.json     # Windows 文件版本
-├── embeddata/           # 构建用嵌入资源（download-deps 生成，打入 exe）
+├── embeddata/           # 构建用嵌入资源（download-deps 生成，打入二进制）
 ├── scripts/
 │   ├── download-deps.ps1
+│   ├── download-deps-darwin.sh
 │   ├── build-windows.ps1
 │   └── build-darwin.sh
 ├── docs/
@@ -105,7 +132,7 @@ aiWeb/
 | 最大上传 | 10MB |
 | 模型 | 内嵌于 exe（可用 `YKS_MODEL_DIR` 覆盖为外挂目录） |
 
-环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`
+环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_ORT_LIB`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`
 
 ## 依赖
 

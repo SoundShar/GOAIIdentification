@@ -32,11 +32,14 @@ POST /api/upload (image)
 
 ## 模型与运行时
 
-- 推理：`github.com/yalue/onnxruntime_go`
-- **单文件分发**：YOLO / 人脸 ONNX 与 `onnxruntime.dll` 在构建时嵌入 exe（`embeddata/` → `go:embed`）
-- 运行时 DLL 解压至 `%LOCALAPPDATA%\yks-tool\`；模型从内存加载
-- 调试可用 `YKS_MODEL_DIR` 覆盖为外挂模型目录
-- 构建需 **CGO** 与 MinGW/gcc（Windows）
+- 推理：`github.com/yalue/onnxruntime_go v1.12.1` + ONNX Runtime 1.19.2
+- **单文件分发**：YOLO / 人脸 ONNX 与平台原生库在构建时嵌入（`go:embed`）
+  - Windows：`assets_embed_windows.go` → `onnxruntime.dll`
+  - macOS arm64：`assets_embed_darwin_arm64.go` → `darwin_arm64/libonnxruntime.dylib`
+  - macOS amd64：`assets_embed_darwin_amd64.go` → `darwin_amd64/libonnxruntime.dylib`
+  - 共用：`assets_embed_common.go` → 三个 `.onnx`
+- 运行时原生库解压至用户缓存 `yks-tool/`；模型从内存加载
+- 构建需 **CGO**（Windows：MinGW；macOS：clang）
 
 ## 参考
 

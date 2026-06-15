@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"image"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 
@@ -90,21 +88,9 @@ var (
 	faceRecSess     *ort.DynamicAdvancedSession
 )
 
-func loadModelONNX(name string) ([]byte, error) {
-	if dir := os.Getenv("YKS_MODEL_DIR"); dir != "" {
-		path := filepath.Join(dir, name)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read model %s: %w", path, err)
-		}
-		return data, nil
-	}
-	return loadEmbeddedModelBytes(name)
-}
-
 // InitDetector 从嵌入资源加载 ONNX 模型，启动 HTTP 前调用
 func InitDetector() error {
-	ortPath, err := materializeOrtDLL()
+	ortPath, err := materializeOrtLib()
 	if err != nil {
 		return err
 	}

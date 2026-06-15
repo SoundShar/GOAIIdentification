@@ -109,7 +109,8 @@ embeddata/*.onnx
 embeddata/*.dll
 embeddata/buffalo_sc/
 embeddata/buffalo_sc.zip
-embeddata/ort_tmp/
+embeddata/darwin_arm64/libonnxruntime.dylib
+embeddata/darwin_amd64/libonnxruntime.dylib
 bin
 live
 native
