@@ -12,6 +12,12 @@ func main() {
 		panic(err)
 	}
 
+	if os.Getenv("YKS_SKIP_DETECTOR") != "1" {
+		if err := InitDetector(); err != nil {
+			getLogger().Error("detector_init_failed", "error", err.Error())
+		}
+	}
+
 	go func() {
 		if err := startHTTPServer(); err != nil {
 			os.Exit(1)

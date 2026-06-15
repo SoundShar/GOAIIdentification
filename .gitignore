@@ -97,8 +97,19 @@ out/
 # vscode
 .vscode/
 .vs
-docs
 build
+resource.syso
+onnxruntime.dll
+onnxruntime-win.zip
+ort_tmp/
+models/*.onnx
+models/buffalo_sc/
+models/buffalo_sc.zip
+embeddata/*.onnx
+embeddata/*.dll
+embeddata/buffalo_sc/
+embeddata/buffalo_sc.zip
+embeddata/ort_tmp/
 bin
 live
 native

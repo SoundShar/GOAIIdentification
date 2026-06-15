@@ -2,7 +2,10 @@ module aiweb
 
 go 1.26.4
 
-require github.com/getlantern/systray v1.2.2
+require (
+	github.com/getlantern/systray v1.2.2
+	github.com/yalue/onnxruntime_go v1.12.1
+)
 
 require (
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect

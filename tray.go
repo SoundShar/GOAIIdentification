@@ -26,8 +26,8 @@ func trayIconData() []byte {
 
 func onTrayReady() {
 	systray.SetIcon(trayIconData())
-	systray.SetTitle("AI Web")
-	systray.SetTooltip("AI Web 本地服务运行中")
+	systray.SetTitle("yks-tool")
+	systray.SetTooltip("考试服务工具运行中")
 
 	quitItem := systray.AddMenuItem("退出", "关闭本地服务")
 	go func() {

@@ -7,13 +7,14 @@ import (
 	"time"
 )
 
-const serverAddr = "127.0.0.1:8080"
+const serverAddr = "127.0.0.1:7986"
 
 var httpServer *http.Server
 
 func newMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", handleHealth)
+	mux.HandleFunc("/api/init", handleInit)
 	mux.HandleFunc("/api/upload", handleUpload)
 
 	return chainMiddleware(mux, loggingMiddleware, corsMiddleware)
@@ -24,8 +25,8 @@ func startHTTPServer() error {
 		Addr:              serverAddr,
 		Handler:           newMux(),
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
