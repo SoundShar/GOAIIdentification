@@ -1,6 +1,19 @@
 # API 文档
 
-服务地址：`http://127.0.0.1:7986`
+服务地址：`https://local.sharas.cn:7986`
+
+**前置条件：**
+
+- `local.sharas.cn` 须解析到 `127.0.0.1`（hosts 或 DNS）
+- 浏览器访问须使用域名（证书 SAN 为 `local.sharas.cn`）
+- HTTPS 考试页跨端口调用本服务时，服务端返回 CORS 白名单 Origin 与 `Access-Control-Allow-Private-Network: true`
+- 内置允许的考试页 Origin：`https://yk.cetset.com`、`https://test.cetset.com`、`https://kspre.yks365.net`、`https://ks.yks365.net`、`https://local.sharas.cn`（可用 `YKS_CORS_ORIGIN` 覆盖）
+
+本地 curl 可用 `-k` 跳过证书校验：
+
+```bash
+curl -k https://local.sharas.cn:7986/api/health
+```
 
 ## GET /api/health
 

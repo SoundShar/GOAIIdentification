@@ -1,12 +1,12 @@
 # yks-tool 考试服务工具
 
-纯 Go 实现的本地后台 HTTP 服务，无 Web 界面，供本机其他程序通过 HTTP 调用。集成 YOLO11 ONNX 监考识别（对齐 aiIdentification 八种告警）。
+纯 Go 实现的本地后台 HTTPS 服务，无 Web 界面，供本机 HTTPS 考试页通过域名直连调用。集成 YOLO11 ONNX 监考识别（对齐 aiIdentification 八种告警）。
 
-启动后以系统托盘（Windows）或菜单栏图标（macOS）驻留后台，监听 `127.0.0.1:7986`。
+启动后以系统托盘（Windows）或菜单栏图标（macOS）驻留后台，监听 `127.0.0.1:7986`（HTTPS）。对外访问地址：`https://local.sharas.cn:7986`（需 DNS 将 `local.sharas.cn` 解析到 `127.0.0.1`）。
 
 ## 功能特性
 
-- **本地 HTTP 服务**：仅监听 `127.0.0.1`
+- **本地 HTTPS 服务**：监听 `127.0.0.1:7986`，TLS 证书内嵌于 exe
 - **AI 图片识别**：`POST /api/upload` 返回无人/多人/换人/转头/低头/范围/书籍/手机
 - **基准人脸**：`POST /api/init` 设置换人比对基准脸
 - **健康检查**：`GET /api/health`
@@ -65,18 +65,20 @@ chmod +x scripts/build-darwin.sh scripts/download-deps-darwin.sh
 
 ## API 摘要
 
-服务地址：`http://127.0.0.1:7986`
+服务地址：`https://local.sharas.cn:7986`（浏览器须用域名，不能用 `https://127.0.0.1:7986`，证书 SAN 不匹配）
+
+**前置条件：** `local.sharas.cn` A 记录或 hosts 指向 `127.0.0.1`。
 
 ### 设置基准人脸
 
 ```bash
-curl -X POST http://127.0.0.1:7986/api/init -F "master_face=@face.jpg"
+curl -k -X POST https://local.sharas.cn:7986/api/init -F "master_face=@face.jpg"
 ```
 
 ### 上传识别
 
 ```bash
-curl -X POST http://127.0.0.1:7986/api/upload -F "image=@photo.jpg"
+curl -k -X POST https://local.sharas.cn:7986/api/upload -F "image=@photo.jpg"
 ```
 
 响应含 `detection`（8 项布尔）与 `codes`（行为码列表）。详见 [docs/api.md](docs/api.md)。
@@ -106,7 +108,9 @@ aiWeb/
 ├── assets_embed_windows.go
 ├── assets_embed_darwin_arm64.go   # build tag: darwin && arm64
 ├── assets_embed_darwin_amd64.go   # build tag: darwin && amd64
+├── assets_embed_tls.go
 ├── versioninfo.json     # Windows 文件版本
+├── ssl/                 # TLS 证书源文件（构建时复制到 embeddata/ssl/）
 ├── embeddata/           # 构建用嵌入资源（download-deps 生成，打入二进制）
 ├── scripts/
 │   ├── download-deps.ps1
@@ -128,11 +132,12 @@ aiWeb/
 | 配置项 | 默认值 |
 |--------|--------|
 | 监听地址 | `127.0.0.1:7986` |
+| 对外 URL | `https://local.sharas.cn:7986` |
 | 上传字段 | `image` |
 | 最大上传 | 10MB |
 | 模型 | 内嵌于 exe（可用 `YKS_MODEL_DIR` 覆盖为外挂目录） |
 
-环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_ORT_LIB`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`
+环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_ORT_LIB`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`、`YKS_HTTP_ONLY`（`1` 时回退 HTTP，仅开发调试）、`YKS_CORS_ORIGIN`（可选，覆盖内置考试页 CORS 白名单）
 
 ## 依赖
 

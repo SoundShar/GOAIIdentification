@@ -2,17 +2,20 @@
 
 ## 概述
 
-`yks-tool` 是纯 Go 实现的本地 HTTP 托盘服务，监听 `127.0.0.1:7986`，提供图片上传与 AI 监考识别能力。
+`yks-tool` 是纯 Go 实现的本地 HTTPS 托盘服务，监听 `127.0.0.1:7986`，对外 URL 为 `https://local.sharas.cn:7986`，提供图片上传与 AI 监考识别能力。
+
+HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；服务端配置 CORS 白名单（默认 `https://local.sharas.cn`）与 `Access-Control-Allow-Private-Network`，满足浏览器 Private Network Access 要求。
 
 ## 模块
 
 | 文件 | 职责 |
 |------|------|
-| `main.go` | 入口：日志、检测器初始化、HTTP、托盘 |
-| `server.go` | 路由与 HTTP 服务生命周期 |
+| `main.go` | 入口：日志、检测器初始化、HTTPS、托盘 |
+| `server.go` | 路由与 HTTPS 服务生命周期 |
 | `handler.go` | `/api/health`、`/api/init`、`/api/upload` |
 | `detector.go` | **单文件** YOLO11 + 人脸 ONNX 推理与 8 项告警 |
-| `middleware.go` | 请求日志、CORS |
+| `assets_embed_tls.go` | TLS 证书内嵌（`embeddata/ssl/`） |
+| `middleware.go` | 请求日志、CORS、Private Network |
 | `tray.go` | 系统托盘 |
 | `logger.go` | slog 文件日志 |
 

@@ -43,10 +43,46 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
+type rootResponse struct {
+	Status  string            `json:"status"`
+	Version string            `json:"version"`
+	Service string            `json:"service"`
+	APIs    map[string]string `json:"apis"`
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			OK:      false,
+			Message: "not found",
+		})
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+			OK:      false,
+			Message: "method not allowed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, rootResponse{
+		Status:  "ok",
+		Version: appVersion,
+		Service: "yks-tool",
+		APIs: map[string]string{
+			"health": "/api/health",
+			"init":   "/api/init",
+			"upload": "/api/upload",
+		},
+	})
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -2,6 +2,9 @@ package main
 
 import (
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -30,11 +33,69 @@ func (rec *responseRecorder) Write(data []byte) (int, error) {
 	return n, err
 }
 
+var defaultCorsOrigins = []string{
+	"https://yk.cetset.com",
+	"https://test.cetset.com",
+	"https://kspre.yks365.net",
+	"https://ks.yks365.net",
+	"https://local.sharas.cn",
+}
+
+func allowedCorsOrigins() []string {
+	raw := os.Getenv("YKS_CORS_ORIGIN")
+	if raw == "" {
+		return defaultCorsOrigins
+	}
+
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	if len(origins) == 0 {
+		return defaultCorsOrigins
+	}
+	return origins
+}
+
+func resolveCorsOrigin(requestOrigin string) (string, bool) {
+	if requestOrigin == "" {
+		return "", false
+	}
+
+	for _, allowedOrigin := range allowedCorsOrigins() {
+		if requestOrigin == allowedOrigin {
+			return requestOrigin, true
+		}
+	}
+
+	parsedOrigin, err := url.Parse(requestOrigin)
+	if err != nil || parsedOrigin.Hostname() == "" {
+		return "", false
+	}
+
+	if parsedOrigin.Hostname() == "local.sharas.cn" {
+		return requestOrigin, true
+	}
+
+	return "", false
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		requestOrigin := r.Header.Get("Origin")
+		if corsOrigin, ok := resolveCorsOrigin(requestOrigin); ok {
+			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+			w.Header().Set("Vary", "Origin")
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Private-Network", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -68,6 +129,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			"bytes_in", bytesIn,
 			"bytes_out", rec.bytesOut,
 			"remote", r.RemoteAddr,
+			"origin", r.Header.Get("Origin"),
 			"user_agent", r.UserAgent(),
 		)
 	})

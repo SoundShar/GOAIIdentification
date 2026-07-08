@@ -36,8 +36,9 @@ cd D:\dev\aiWeb
 脚本会：
 
 1. 下载/导出资源到 `embeddata/`（含 `onnxruntime.dll`）
-2. 生成 Windows 版本资源（`versioninfo.json`）
-3. 编译 `build/yks-tool.exe`（模型与 DLL 已嵌入）
+2. 校验 `ssl/local.sharas.cn_bundle.crt` 与 `.key`，复制到 `embeddata/ssl/`
+3. 生成 Windows 版本资源（`versioninfo.json`）
+4. 编译 `build/yks-tool.exe`（模型、DLL、TLS 证书已嵌入）
 
 产物约 40MB，分发只需 `yks-tool.exe`。
 
@@ -45,6 +46,28 @@ cd D:\dev\aiWeb
 
 - ONNX 模型从内存加载
 - `onnxruntime.dll` 首次解压到 `%LOCALAPPDATA%\yks-tool\`
+- 默认以 **HTTPS** 监听 `127.0.0.1:7986`，对外 URL：`https://local.sharas.cn:7986`
+
+### TLS 与 DNS
+
+| 项 | 说明 |
+|----|------|
+| 证书源 | `ssl/local.sharas.cn_bundle.crt` + `ssl/local.sharas.cn.key` |
+| 构建嵌入 | 复制到 `embeddata/ssl/` 后打入 exe |
+| DNS | `local.sharas.cn` → `127.0.0.1` |
+| 开发回退 | `YKS_HTTP_ONLY=1` 时使用 HTTP（仅本机调试） |
+
+### 联调验收
+
+```powershell
+# 1. hosts 或 DNS：local.sharas.cn -> 127.0.0.1
+# 2. 启动 yks-tool.exe
+curl -k https://local.sharas.cn:7986/api/health
+# 预期：{"status":"ok",...}
+
+# 3. 浏览器打开 https://local.sharas.cn/.../videoVIew.html
+# 预期：无 Mixed Content / CORS 错误，控制台有上传日志
+```
 
 ### 文件版本
 
@@ -120,4 +143,6 @@ go run .
 | `YKS_ORT_DLL` | 可选，指定 ONNX Runtime 库路径（Windows dll / Mac dylib） |
 | `YKS_ORT_LIB` | 同 `YKS_ORT_DLL`（Mac 推荐别名） |
 | `YKS_SKIP_DETECTOR` | `1` 时跳过模型加载 |
+| `YKS_HTTP_ONLY` | `1` 时以 HTTP 启动（开发调试，默认 HTTPS） |
+| `YKS_CORS_ORIGIN` | 可选，覆盖内置 CORS 白名单（逗号分隔）；默认已内置考试页域名 |
 | `AIWEB_CONSOLE` | `1` 时日志输出控制台 |

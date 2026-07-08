@@ -111,6 +111,8 @@ embeddata/buffalo_sc/
 embeddata/buffalo_sc.zip
 embeddata/darwin_arm64/libonnxruntime.dylib
 embeddata/darwin_amd64/libonnxruntime.dylib
+embeddata/ssl/*.key
+embeddata/ssl/*.crt
 bin
 live
 native
