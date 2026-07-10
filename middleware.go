@@ -39,6 +39,7 @@ var defaultCorsOrigins = []string{
 	"https://kspre.yks365.net",
 	"https://ks.yks365.net",
 	"https://local.sharas.cn",
+	"http://localhost:9627",
 }
 
 func allowedCorsOrigins() []string {
