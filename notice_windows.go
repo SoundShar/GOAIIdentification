@@ -11,6 +11,7 @@ import (
 var (
 	user32              = syscall.NewLazyDLL("user32.dll")
 	kernel32            = syscall.NewLazyDLL("kernel32.dll")
+	gdi32               = syscall.NewLazyDLL("gdi32.dll")
 	getModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
 	registerClassExW    = user32.NewProc("RegisterClassExW")
 	createWindowExW     = user32.NewProc("CreateWindowExW")
@@ -28,6 +29,9 @@ var (
 	adjustWindowRectEx  = user32.NewProc("AdjustWindowRectEx")
 	getClientRect       = user32.NewProc("GetClientRect")
 	setFocus            = user32.NewProc("SetFocus")
+	setBkMode           = gdi32.NewProc("SetBkMode")
+	setTextColor        = gdi32.NewProc("SetTextColor")
+	getStockObject      = gdi32.NewProc("GetStockObject")
 )
 
 const (
@@ -60,9 +64,10 @@ const (
 
 	stmSetIcon = 0x0170
 
-	wmCreate  = 0x0001
-	wmCommand = 0x0111
-	wmClose   = 0x0010
+	wmCreate         = 0x0001
+	wmCommand        = 0x0111
+	wmClose          = 0x0010
+	wmCtlColorStatic = 0x0138
 
 	idNoticeOkBtn = 1
 	idNoticeIcon  = 2
@@ -73,6 +78,9 @@ const (
 	hwndTopmost = ^uintptr(0)
 	bnClicked   = 0
 	colorWindow = 5
+	whiteBrush  = 0 // WHITE_BRUSH
+	transparent = 1
+	rgbBlack    = 0x00000000
 )
 
 type wndClassEx struct {
@@ -224,6 +232,12 @@ func noticeDialogWndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	case wmCreate:
 		createNoticeDialogControls(hwnd)
 		return 0
+	case wmCtlColorStatic:
+		// 去掉 Static 默认灰底，与窗口白底一致
+		setBkMode.Call(wParam, transparent)
+		setTextColor.Call(wParam, rgbBlack)
+		brush, _, _ := getStockObject.Call(whiteBrush)
+		return brush
 	case wmCommand:
 		if wParam&0xffff == idNoticeOkBtn && (wParam>>16)&0xffff == bnClicked {
 			destroyWindow.Call(hwnd)
