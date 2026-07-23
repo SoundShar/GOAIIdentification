@@ -12,7 +12,7 @@
 - **健康检查**：`GET /api/health`
 - **请求日志**：macOS `~/Library/Logs/yks-tool/app.log`；Windows `%LOCALAPPDATA%\yks-tool\logs\app.log`
 - **系统托盘 / 菜单栏退出**
-- **启动提示**：点击后立即弹出跨平台一致的「启动中」Loading，服务就绪后显示「运行考试服务成功」
+- **启动提示**：HTTPS 服务就绪后弹出原生对话框「运行考试服务成功」（Windows MessageBox / macOS 系统对话框）
 
 ## 环境要求
 

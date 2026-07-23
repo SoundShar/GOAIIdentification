@@ -36,7 +36,7 @@ cd D:\dev\aiWeb
 脚本会：
 
 1. 下载/导出资源到 `embeddata/`（含 `onnxruntime.dll`）
-2. 生成 Windows 版本资源（`versioninfo.json`）
+2. 生成 Windows 版本资源（`versioninfo.json` + `assets/icon.ico` → `resource.syso`）
 3. 编译 `build/yks-tool.exe`（模型与 DLL 已嵌入；TLS 本机 CA 运行时生成）
 
 产物约 40MB，分发只需 `yks-tool.exe`。

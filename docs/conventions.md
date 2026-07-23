@@ -28,11 +28,9 @@
 
 ## 启动提示 UI
 
-- 文案：窗口标题「考试服务工具」（系统标题栏）；启动中「正在启动考试服务…」；成功「运行考试服务成功」；失败「启动考试服务失败」；按钮「确定」
-- 页面内不再重复展示产品名标题，仅保留状态文案与确定按钮
-- 实现：共用 HTML 页面；Windows 优先 Edge/Chrome `--app`（回退 mshta）；macOS 优先 JXA+WKWebView（回退 Chromium `--app`）
-- 子进程参数：`--notice-ui`（仅弹窗，不启托盘/检测器）
-- 时机：CA/提权与 Listen 完成后再拉起提示窗（避免与管理员授权对话框抢交互）；boot status 为 `ready`/`failed`；子进程轮询 `/api/health`
+- 文案：窗口标题「考试服务工具」；成功「运行考试服务成功」；失败「启动考试服务失败」；按钮「确定」
+- 实现：Windows `MessageBoxW`；macOS `osascript display dialog`；其他平台无 GUI 时跳过
+- 时机：CA/提权与 HTTPS Listen 完成后再弹窗（避免 macOS 上与管理员授权对话框抢交互）
 
 ## 日志路径
 

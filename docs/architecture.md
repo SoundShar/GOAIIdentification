@@ -26,7 +26,7 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 | `server.go` | 路由与 HTTPS 服务生命周期 |
 | `handler.go` | `/api/health`、`/api/init`、`/api/upload` |
 | `detector.go` | **单文件** YOLO11 + 人脸 ONNX 推理与 8 项告警 |
-| `notice.go` / `notice_ui*.go` | 跨平台启动提示：TLS/Listen 结束后再弹窗（成功/失败）；Win/Mac 共用同一 HTML 页 |
+| `notice.go` / `notice_*.go` | 跨平台启动提示：HTTPS Listen 成功后弹原生对话框（成功/失败） |
 | `assets_embed_tls.go` | `publicServiceURL` + `loadTLSCertificate()` 入口 |
 | `tls_local_ca.go` | 本机 CA/叶子证目录、生成与复用 |
 | `tls_trust_*.go` | 系统信任库检测与提权安装（硬失败） |
@@ -58,7 +58,7 @@ POST /api/upload (image)
   - 共用：`assets_embed_common.go` → 三个 `.onnx`
 - 运行时原生库解压至用户缓存 `yks-tool/`；模型从内存加载
 - **启动策略**：本机 CA/提权与 HTTPS Listen 成功后再进托盘；拒绝提权则进程退出、不驻留托盘。ONNX 会话在后台加载。`/api/init`、`/api/upload` 在未就绪时返回 `503`；`/api/health` 含 `detector` 字段（`ready` / `loading` / `error` / `skipped`）
-- **启动提示**：主进程先完成 CA/提权与 HTTPS Listen，再拉起 `--notice-ui` 子进程（避免 macOS 上提示窗与管理员授权抢交互导致 `SecTrustSettings` 失败）；子进程轮询本机 `/api/health`，并读取 boot status（`ready`/`failed`）
+- **启动提示**：HTTPS Listen 完成后在主进程弹原生对话框；成功「运行考试服务成功」，失败「启动考试服务失败」后进程退出
 - macOS 正式包 entitlements：`disable-library-validation`（加载非本 Team 的 ORT dylib）、网络 client/server
 - 构建需 **CGO**（Windows：MinGW；macOS：clang）
 
