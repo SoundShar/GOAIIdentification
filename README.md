@@ -2,16 +2,17 @@
 
 纯 Go 实现的本地后台 HTTPS 服务，无 Web 界面，供本机 HTTPS 考试页通过域名直连调用。集成 YOLO11 ONNX 监考识别（对齐 aiIdentification 八种告警）。
 
-启动后以系统托盘（Windows）或菜单栏图标（macOS）驻留后台，监听 `127.0.0.1:7986`（HTTPS）。对外访问地址：`https://local.sharas.cn:7986`（需 DNS 将 `local.sharas.cn` 解析到 `127.0.0.1`）。
+启动后以系统托盘（Windows）或菜单栏图标（macOS）驻留后台，监听 `127.0.0.1:7986`（HTTPS）。对外访问地址：`https://local.cetset.com:7986`（需 DNS 将 `local.cetset.com` 解析到 `127.0.0.1`）。
 
 ## 功能特性
 
-- **本地 HTTPS 服务**：监听 `127.0.0.1:7986`，TLS 证书内嵌于 exe
+- **本地 HTTPS 服务**：监听 `127.0.0.1:7986`；本机生成 CA/叶子证并提权写入系统信任库
 - **AI 图片识别**：`POST /api/upload` 返回无人/多人/换人/转头/低头/范围/书籍/手机
 - **基准人脸**：`POST /api/init` 设置换人比对基准脸
 - **健康检查**：`GET /api/health`
 - **请求日志**：macOS `~/Library/Logs/yks-tool/app.log`；Windows `%LOCALAPPDATA%\yks-tool\logs\app.log`
 - **系统托盘 / 菜单栏退出**
+- **启动提示**：点击后立即弹出跨平台一致的「启动中」Loading，服务就绪后显示「运行考试服务成功」
 
 ## 环境要求
 
@@ -46,8 +47,7 @@ go run .
 ```bash
 chmod +x scripts/build-darwin.sh scripts/download-deps-darwin.sh scripts/sign-notarize-darwin.sh
 ./scripts/build-darwin.sh
-# 产物：build/yks-tool.app（Universal，未签名）
-# 中间：build/yks-tool-darwin-arm64|amd64|universal
+# 产物：build/yks-tool.app（Universal，未签名；中间二进制构建后删除）
 open build/yks-tool.app
 ```
 
@@ -58,7 +58,7 @@ open build/yks-tool.app
 #   YKS_APPLE_IDENTITY='BBAB30F5901351F4F769DFEEF702BAF26CE968C4'  # 证书 SHA-1，避免同名 ambiguous
 #   YKS_NOTARY_PROFILE='com.seaskylight.yksmacos'   # 与 Electron 考试端共用钥匙串 profile
 ./scripts/sign-notarize-darwin.sh
-# 产物：build/yks-tool-macos.zip（内含公证并 staple 的 yks-tool.app）
+# 产物：build/yks-tool.app（stapled）+ build/yks-tool-macos.zip；临时公证包与 lipo 中间文件会删掉
 ```
 
 `build-darwin.sh` 会调用 `download-deps-darwin.sh` 自动准备 `embeddata/*.onnx` 与各架构 `libonnxruntime.dylib`（YOLO 导出需本机 Python + `ultralytics`），再 `lipo` 合成 Universal 并组装 `.app`（Bundle ID：`com.seaskylight.ykstool`）。安装：解压 zip 后拖到「应用程序」或直接打开。
@@ -74,20 +74,24 @@ open build/yks-tool.app
 
 ## API 摘要
 
-服务地址：`https://local.sharas.cn:7986`（浏览器须用域名，不能用 `https://127.0.0.1:7986`，证书 SAN 不匹配）
+服务地址：`https://local.cetset.com:7986`（浏览器须用域名，不能用 `https://127.0.0.1:7986`，证书 SAN 不匹配）
 
-**前置条件：** `local.sharas.cn` A 记录或 hosts 指向 `127.0.0.1`。
+**前置条件：**
+
+- `local.cetset.com` A 记录或 hosts 指向 `127.0.0.1`
+- 首次启动同意系统提权安装本机根证书（拒绝则无法启动 HTTPS；下次打开再提示）
+- Firefox 默认不信任系统 CA，需手动导入本机 `ca.crt`，或使用 Safari / Chrome / Edge
 
 ### 设置基准人脸
 
 ```bash
-curl -k -X POST https://local.sharas.cn:7986/api/init -F "master_face=@face.jpg"
+curl -X POST https://local.cetset.com:7986/api/init -F "master_face=@face.jpg"
 ```
 
 ### 上传识别
 
 ```bash
-curl -k -X POST https://local.sharas.cn:7986/api/upload -F "image=@photo.jpg"
+curl -X POST https://local.cetset.com:7986/api/upload -F "image=@photo.jpg"
 ```
 
 响应含 `detection`（8 项布尔）与 `codes`（行为码列表）。详见 [docs/api.md](docs/api.md)。
@@ -117,10 +121,11 @@ aiWeb/
 ├── assets_embed_windows.go
 ├── assets_embed_darwin_arm64.go   # build tag: darwin && arm64
 ├── assets_embed_darwin_amd64.go   # build tag: darwin && amd64
-├── assets_embed_tls.go
+├── assets_embed_tls.go            # publicServiceURL + loadTLSCertificate
+├── tls_local_ca.go                # 本机 CA / 叶子证
+├── tls_trust_*.go                 # 系统信任库提权安装
 ├── versioninfo.json     # Windows 文件版本（CompanyName=com.seaskylight.ykstool）
 ├── packaging/macos/     # Info.plist / entitlements / AppIcon.icns
-├── ssl/                 # TLS 证书源文件（构建时复制到 embeddata/ssl/）
 ├── embeddata/           # 构建用嵌入资源（download-deps 生成，打入二进制）
 ├── scripts/
 │   ├── download-deps.ps1
@@ -143,12 +148,12 @@ aiWeb/
 | 配置项 | 默认值 |
 |--------|--------|
 | 监听地址 | `127.0.0.1:7986` |
-| 对外 URL | `https://local.sharas.cn:7986` |
+| 对外 URL | `https://local.cetset.com:7986` |
 | 上传字段 | `image` |
 | 最大上传 | 10MB |
 | 模型 | 内嵌于 exe（可用 `YKS_MODEL_DIR` 覆盖为外挂目录） |
 
-环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_ORT_LIB`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`、`YKS_HTTP_ONLY`（`1` 时回退 HTTP，仅开发调试）、`YKS_CORS_ORIGIN`（可选，覆盖内置考试页 CORS 白名单）
+环境变量：`YKS_MODEL_DIR`、`YKS_ORT_DLL`、`YKS_ORT_LIB`、`YKS_SKIP_DETECTOR`、`AIWEB_CONSOLE`、`YKS_HTTP_ONLY`（`1` 时跳过本机 CA/提权，回退 HTTP，仅开发调试）、`YKS_CORS_ORIGIN`（可选，覆盖内置考试页 CORS 白名单）
 
 ## 依赖
 

@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # 构建 macOS Universal yks-tool.app（未签名，供开发联调）
-# 产物：
-#   build/yks-tool-darwin-arm64
-#   build/yks-tool-darwin-amd64
-#   build/yks-tool-darwin-universal
-#   build/yks-tool.app
+# 产物：build/yks-tool.app（组装完成后删除 lipo 中间二进制）
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,21 +18,6 @@ export CGO_ENABLED=1
 
 chmod +x scripts/download-deps-darwin.sh
 ./scripts/download-deps-darwin.sh
-
-SSL_CERT="ssl/local.sharas.cn_bundle.crt"
-SSL_KEY="ssl/local.sharas.cn.key"
-if [[ ! -f "$SSL_CERT" ]]; then
-  echo "error: missing TLS cert: $SSL_CERT" >&2
-  exit 1
-fi
-if [[ ! -f "$SSL_KEY" ]]; then
-  echo "error: missing TLS key: $SSL_KEY" >&2
-  exit 1
-fi
-mkdir -p embeddata/ssl
-cp -f "$SSL_CERT" "embeddata/ssl/local.sharas.cn_bundle.crt"
-cp -f "$SSL_KEY" "embeddata/ssl/local.sharas.cn.key"
-echo "TLS assets copied to embeddata/ssl/"
 
 mkdir -p build
 
@@ -114,23 +95,20 @@ fi
 
 echo ""
 echo "=== Verification ==="
-if command -v file >/dev/null 2>&1; then
-  file "build/${APP_NAME}-darwin-arm64"
-  file "build/${APP_NAME}-darwin-amd64"
-  file "build/${APP_NAME}-darwin-universal"
-fi
-lipo -info "build/${APP_NAME}-darwin-universal"
 lipo -info "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 if command -v defaults >/dev/null 2>&1; then
   echo "LSMinimumSystemVersion=$(defaults read "${ROOT_DIR}/${APP_BUNDLE}/Contents/Info" LSMinimumSystemVersion 2>/dev/null || true)"
   echo "CFBundleIdentifier=$(defaults read "${ROOT_DIR}/${APP_BUNDLE}/Contents/Info" CFBundleIdentifier 2>/dev/null || true)"
 fi
 
+echo "Removing lipo intermediate binaries..."
+rm -f \
+  "build/${APP_NAME}-darwin-arm64" \
+  "build/${APP_NAME}-darwin-amd64" \
+  "build/${APP_NAME}-darwin-universal"
+
 echo ""
 echo "Build complete (unsigned .app for local use):"
-echo "  build/${APP_NAME}-darwin-arm64"
-echo "  build/${APP_NAME}-darwin-amd64"
-echo "  build/${APP_NAME}-darwin-universal"
 echo "  ${APP_BUNDLE}"
 echo ""
 echo "Run: open ${APP_BUNDLE}"

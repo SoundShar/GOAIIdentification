@@ -41,6 +41,10 @@ func startHTTPServer() error {
 
 	cert, err := loadTLSCertificate()
 	if err != nil {
+		getLogger().Error("tls_certificate_load_failed",
+			"error", err.Error(),
+			"hint", "需授权安装证书才能启动",
+		)
 		return err
 	}
 
@@ -57,6 +61,8 @@ func startHTTPServer() error {
 	return serveHTTPListener(true)
 }
 
+// serveHTTPListener 完成 Listen 后立即返回；Serve 在后台运行。
+// 这样调用方可在 TLS/提权成功并开始监听后再进入托盘；拒绝提权则不会驻留托盘。
 func serveHTTPListener(useTLS bool) error {
 	var (
 		ln  net.Listener
@@ -73,13 +79,12 @@ func serveHTTPListener(useTLS bool) error {
 		return err
 	}
 
-	showServiceStartedNotice()
-
-	err = httpServer.Serve(ln)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		getLogger().Error("http server failed", "error", err.Error())
-		return err
-	}
+	go func() {
+		serveErr := httpServer.Serve(ln)
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			getLogger().Error("http server failed", "error", serveErr.Error())
+		}
+	}()
 	return nil
 }
 

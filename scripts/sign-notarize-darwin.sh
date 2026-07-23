@@ -93,6 +93,15 @@ rm -f "${DIST_ZIP}"
 ditto -c -k --keepParent "${APP_BUNDLE}" "${DIST_ZIP}"
 
 echo ""
+echo "=== Cleanup intermediate artifacts ==="
+rm -f "${NOTARIZE_ZIP}"
+rm -f \
+  build/yks-tool-darwin-arm64 \
+  build/yks-tool-darwin-amd64 \
+  build/yks-tool-darwin-universal
+echo "Removed notarize zip and lipo intermediate binaries"
+
+echo ""
 echo "=== Local Gatekeeper assess (best-effort) ==="
 if spctl --assess -vv --type execute "${APP_BUNDLE}" 2>&1; then
   echo "spctl assess: ok"
@@ -104,4 +113,3 @@ echo ""
 echo "Sign & notarize complete:"
 echo "  ${APP_BUNDLE}  (stapled)"
 echo "  ${DIST_ZIP}"
-echo "  ${NOTARIZE_ZIP}  (notarization upload artifact; safe to delete)"

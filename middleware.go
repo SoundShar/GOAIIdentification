@@ -38,7 +38,7 @@ var defaultCorsOrigins = []string{
 	"https://test.cetset.com",
 	"https://kspre.yks365.net",
 	"https://ks.yks365.net",
-	"https://local.sharas.cn",
+	"https://local.cetset.com",
 	"http://localhost:9627",
 }
 
@@ -78,7 +78,7 @@ func resolveCorsOrigin(requestOrigin string) (string, bool) {
 		return "", false
 	}
 
-	if parsedOrigin.Hostname() == "local.sharas.cn" {
+	if parsedOrigin.Hostname() == "local.cetset.com" {
 		return requestOrigin, true
 	}
 

@@ -1,18 +1,20 @@
 # API 文档
 
-服务地址：`https://local.sharas.cn:7986`
+服务地址：`https://local.cetset.com:7986`
 
 **前置条件：**
 
-- `local.sharas.cn` 须解析到 `127.0.0.1`（hosts 或 DNS）
-- 浏览器访问须使用域名（证书 SAN 为 `local.sharas.cn`）
+- `local.cetset.com` 须解析到 `127.0.0.1`（hosts 或 DNS）
+- 浏览器访问须使用域名（证书 SAN 为 `local.cetset.com`）
+- 首次启动须同意提权安装本机根证书；拒绝或失败则 HTTPS 不启动，下次打开再提权
+- Firefox 使用独立证书库，默认不读系统信任，需手动导入本机 `ca.crt`（Windows：`%LOCALAPPDATA%\yks-tool\ssl\ca.crt`；macOS：`~/Library/Application Support/yks-tool/ssl/ca.crt`），或改用系统浏览器
 - HTTPS 考试页跨端口调用本服务时，服务端返回 CORS 白名单 Origin 与 `Access-Control-Allow-Private-Network: true`
-- 内置允许的考试页 Origin：`https://yk.cetset.com`、`https://test.cetset.com`、`https://kspre.yks365.net`、`https://ks.yks365.net`、`https://local.sharas.cn`（可用 `YKS_CORS_ORIGIN` 覆盖）
+- 内置允许的考试页 Origin：`https://yk.cetset.com`、`https://test.cetset.com`、`https://kspre.yks365.net`、`https://ks.yks365.net`、`https://local.cetset.com`（可用 `YKS_CORS_ORIGIN` 覆盖）
 
-本地 curl 可用 `-k` 跳过证书校验：
+系统已信任本机 CA 后，curl 无需 `-k`：
 
 ```bash
-curl -k https://local.sharas.cn:7986/api/health
+curl https://local.cetset.com:7986/api/health
 ```
 
 ## GET /api/health

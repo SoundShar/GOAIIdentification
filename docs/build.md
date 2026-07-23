@@ -12,8 +12,8 @@
 | 平台 | 命令 | 产物 |
 |------|------|------|
 | Windows x64 | `.\scripts\build-windows.ps1` | `build/yks-tool.exe` |
-| macOS（开发） | `./scripts/build-darwin.sh` | `build/yks-tool.app`（Universal，未签名）+ 中间二进制 |
-| macOS（正式） | 上一步 + `./scripts/sign-notarize-darwin.sh` | 公证 staple 后的 `.app` + `build/yks-tool-macos.zip` |
+| macOS（开发） | `./scripts/build-darwin.sh` | `build/yks-tool.app`（Universal，未签名） |
+| macOS（正式） | 上一步 + `./scripts/sign-notarize-darwin.sh` | `build/yks-tool.app`（stapled）+ `build/yks-tool-macos.zip` |
 
 一套源码，各平台**单独编译**；模型 ONNX 三端共用，原生库按平台/架构嵌入。
 
@@ -36,9 +36,8 @@ cd D:\dev\aiWeb
 脚本会：
 
 1. 下载/导出资源到 `embeddata/`（含 `onnxruntime.dll`）
-2. 校验 `ssl/local.sharas.cn_bundle.crt` 与 `.key`，复制到 `embeddata/ssl/`
-3. 生成 Windows 版本资源（`versioninfo.json`）
-4. 编译 `build/yks-tool.exe`（模型、DLL、TLS 证书已嵌入）
+2. 生成 Windows 版本资源（`versioninfo.json`）
+3. 编译 `build/yks-tool.exe`（模型与 DLL 已嵌入；TLS 本机 CA 运行时生成）
 
 产物约 40MB，分发只需 `yks-tool.exe`。
 
@@ -46,28 +45,31 @@ cd D:\dev\aiWeb
 
 - ONNX 模型从内存加载
 - `onnxruntime.dll` 首次解压到 `%LOCALAPPDATA%\yks-tool\`
-- 默认以 **HTTPS** 监听 `127.0.0.1:7986`，对外 URL：`https://local.sharas.cn:7986`
+- 默认以 **HTTPS** 监听 `127.0.0.1:7986`，对外 URL：`https://local.cetset.com:7986`
+- 首次启动生成本机 CA/叶子证到 `%LOCALAPPDATA%\yks-tool\ssl\`，并 UAC 提权写入系统 Root；拒绝则启动失败
 - 日志：`%LOCALAPPDATA%\yks-tool\logs\app.log`
 
 ### TLS 与 DNS
 
 | 项 | 说明 |
 |----|------|
-| 证书源 | `ssl/local.sharas.cn_bundle.crt` + `ssl/local.sharas.cn.key` |
-| 构建嵌入 | 复制到 `embeddata/ssl/` 后打入 exe |
-| DNS | `local.sharas.cn` → `127.0.0.1` |
-| 开发回退 | `YKS_HTTP_ONLY=1` 时使用 HTTP（仅本机调试） |
+| 证书 | 运行时本机 CA + 叶子证（SAN=`local.cetset.com`），目录见上 |
+| 信任 | 自动提权写入系统 Root；已信任且 CA 未变不再弹窗 |
+| 硬失败 | 拒绝 UAC / 安装失败 → 不监听 HTTPS；下次打开再提权 |
+| DNS | `local.cetset.com` → `127.0.0.1` |
+| Firefox | 独立证书库，需手动导入 `ca.crt` 或改用系统浏览器 |
+| 开发回退 | `YKS_HTTP_ONLY=1` 跳过 CA/提权，使用 HTTP（仅本机调试） |
 
 ### 联调验收
 
 ```powershell
-# 1. hosts 或 DNS：local.sharas.cn -> 127.0.0.1
-# 2. 启动 yks-tool.exe
-curl -k https://local.sharas.cn:7986/api/health
-# 预期：{"status":"ok",...}
+# 1. hosts 或 DNS：local.cetset.com -> 127.0.0.1
+# 2. 启动 yks-tool.exe，同意 UAC 安装根证书
+curl https://local.cetset.com:7986/api/health
+# 预期：{"status":"ok",...}（系统已信任时无需 -k）
 
-# 3. 浏览器打开 https://local.sharas.cn/.../videoVIew.html
-# 预期：无 Mixed Content / CORS 错误，控制台有上传日志
+# 3. 浏览器打开 https://local.cetset.com/.../videoVIew.html
+# 预期：无 Mixed Content / CORS / 证书警告，控制台有上传日志
 ```
 
 ### 文件版本
@@ -113,17 +115,11 @@ open build/yks-tool.app
 脚本会：
 
 1. `download-deps-darwin.sh` 导出/下载三个 ONNX 模型，并下载各架构 `libonnxruntime.dylib`
-2. 校验并复制 `ssl/` 证书到 `embeddata/ssl/`（与 Windows 一致）
-3. `MACOSX_DEPLOYMENT_TARGET=12.0` 下分别编译 arm64 / amd64
-4. `lipo` 合成 Universal 二进制
-5. 从 `assets/icon.png` 生成/刷新 `AppIcon.icns`
-6. 组装 `build/yks-tool.app`
-
-中间产物（便于排查）一并保留：
-
-- `build/yks-tool-darwin-arm64`
-- `build/yks-tool-darwin-amd64`
-- `build/yks-tool-darwin-universal`
+2. `MACOSX_DEPLOYMENT_TARGET=12.0` 下分别编译 arm64 / amd64
+3. `lipo` 合成 Universal 二进制
+4. 从 `assets/icon.png` 生成/刷新 `AppIcon.icns`
+5. 组装 `build/yks-tool.app`（TLS 本机 CA 运行时生成，无需构建期 ssl 嵌入）
+6. 删除 `build/yks-tool-darwin-{arm64,amd64,universal}` 中间二进制
 
 未签名 `.app` 本机联调时，若 Gatekeeper 拦截，可右键「打开」或清除隔离属性。
 
@@ -144,7 +140,7 @@ open build/yks-tool.app
 
 也可临时覆盖，或改用 `YKS_APPLE_ID` + `YKS_APPLE_TEAM_ID` + `YKS_APPLE_APP_PASSWORD`。
 
-签名脚本流程：`codesign`（Hardened Runtime + entitlements）→ `ditto` 提交 zip → `notarytool submit --wait` → `stapler staple` → 分发 `yks-tool-macos.zip`。
+签名脚本流程：`codesign`（Hardened Runtime + entitlements）→ `ditto` 提交 zip → `notarytool submit --wait` → `stapler staple` → 写出 `yks-tool-macos.zip` → **清理**公证临时 zip 与残留 lipo 中间二进制。最终 `build/` 仅保留 stapled `.app` 与分发 zip。
 
 `yks-tool.entitlements` 含 `disable-library-validation` / `allow-unsigned-executable-memory`：Hardened Runtime 下需加载解压到 `~/Library/Caches/yks-tool/` 的第三方 `libonnxruntime.dylib`（与主程序 Team ID 不同）。与 it-ogt-pc-mac Electron 侧 entitlements 策略一致。
 
@@ -153,6 +149,7 @@ open build/yks-tool.app
 ### 运行时
 
 - `libonnxruntime.dylib` 首次解压到 `~/Library/Caches/yks-tool/`
+- TLS：本机 CA/叶子证在 `~/Library/Application Support/yks-tool/ssl/`；首次启动 osascript 提权写入系统钥匙串；拒绝则启动失败
 - 日志：`~/Library/Logs/yks-tool/app.log`
 
 ### 架构说明
@@ -192,7 +189,7 @@ go run .
 | `YKS_ORT_DLL` | 可选，指定 ONNX Runtime 库路径（Windows dll / Mac dylib） |
 | `YKS_ORT_LIB` | 同 `YKS_ORT_DLL`（Mac 推荐别名） |
 | `YKS_SKIP_DETECTOR` | `1` 时跳过模型加载 |
-| `YKS_HTTP_ONLY` | `1` 时以 HTTP 启动（开发调试，默认 HTTPS） |
+| `YKS_HTTP_ONLY` | `1` 时跳过本机 CA/提权，以 HTTP 启动（开发调试，默认 HTTPS） |
 | `YKS_CORS_ORIGIN` | 可选，覆盖内置 CORS 白名单（逗号分隔）；默认已内置考试页域名 |
 | `AIWEB_CONSOLE` | `1` 时日志输出控制台 |
 | `YKS_VERSION` | macOS 构建时写入 `CFBundleShortVersionString` / `CFBundleVersion`，默认 `1.0.0` |
