@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"os"
 	"sort"
 	"sync"
 
@@ -82,40 +83,79 @@ type faceLandmarks struct {
 var (
 	detectorMu      sync.RWMutex
 	detectorReady   bool
+	detectorInitErr error
 	masterEmbedding []float32
 	yoloSession     *ort.DynamicAdvancedSession
 	faceDetectSess  *ort.DynamicAdvancedSession
 	faceRecSess     *ort.DynamicAdvancedSession
 )
 
-// InitDetector 从嵌入资源加载 ONNX 模型，启动 HTTP 前调用
+// IsDetectorReady 模型会话是否已加载完成
+func IsDetectorReady() bool {
+	detectorMu.RLock()
+	defer detectorMu.RUnlock()
+	return detectorReady
+}
+
+// DetectorInitError 后台初始化失败原因（仍在加载时返回 nil）
+func DetectorInitError() error {
+	detectorMu.RLock()
+	defer detectorMu.RUnlock()
+	return detectorInitErr
+}
+
+// DetectorStatus 供健康检查：ready / loading / error / skipped
+func DetectorStatus() string {
+	if os.Getenv("YKS_SKIP_DETECTOR") == "1" {
+		return "skipped"
+	}
+	detectorMu.RLock()
+	defer detectorMu.RUnlock()
+	if detectorReady {
+		return "ready"
+	}
+	if detectorInitErr != nil {
+		return "error"
+	}
+	return "loading"
+}
+
+// InitDetector 从嵌入资源加载 ONNX 模型（可异步调用）
 func InitDetector() error {
 	ortPath, err := materializeOrtLib()
 	if err != nil {
+		setDetectorInitErr(err)
 		return err
 	}
 	ort.SetSharedLibraryPath(ortPath)
 
 	if err := ort.InitializeEnvironment(); err != nil {
-		return fmt.Errorf("onnxruntime init: %w", err)
+		err = fmt.Errorf("onnxruntime init: %w", err)
+		setDetectorInitErr(err)
+		return err
 	}
 
 	yoloData, err := loadModelONNX("yolo11.onnx")
 	if err != nil {
+		setDetectorInitErr(err)
 		return err
 	}
 	faceDetectData, err := loadModelONNX("face_detect.onnx")
 	if err != nil {
+		setDetectorInitErr(err)
 		return err
 	}
 	faceRecData, err := loadModelONNX("face_rec.onnx")
 	if err != nil {
+		setDetectorInitErr(err)
 		return err
 	}
 
 	yoloSession, err = ort.NewDynamicAdvancedSessionWithONNXData(yoloData, []string{"images"}, []string{"output0"}, nil)
 	if err != nil {
-		return fmt.Errorf("yolo session: %w", err)
+		err = fmt.Errorf("yolo session: %w", err)
+		setDetectorInitErr(err)
+		return err
 	}
 
 	faceOutputNames := []string{
@@ -126,22 +166,36 @@ func InitDetector() error {
 	}
 	faceDetectSess, err = ort.NewDynamicAdvancedSessionWithONNXData(faceDetectData, []string{"input"}, faceOutputNames, nil)
 	if err != nil {
-		return fmt.Errorf("face detect session: %w", err)
+		err = fmt.Errorf("face detect session: %w", err)
+		setDetectorInitErr(err)
+		return err
 	}
 
 	faceRecSess, err = ort.NewDynamicAdvancedSessionWithONNXData(faceRecData, []string{"input.1"}, []string{"516"}, nil)
 	if err != nil {
-		return fmt.Errorf("face rec session: %w", err)
+		err = fmt.Errorf("face rec session: %w", err)
+		setDetectorInitErr(err)
+		return err
 	}
 
+	detectorMu.Lock()
 	detectorReady = true
+	detectorInitErr = nil
+	detectorMu.Unlock()
 	getLogger().Info("detector_initialized", "ort_dll", ortPath, "models", "embedded")
 	return nil
 }
 
+func setDetectorInitErr(err error) {
+	detectorMu.Lock()
+	detectorInitErr = err
+	detectorReady = false
+	detectorMu.Unlock()
+}
+
 // SetMasterFace 从图片提取基准人脸 embedding
 func SetMasterFace(img image.Image) error {
-	if !detectorReady {
+	if !IsDetectorReady() {
 		return fmt.Errorf("detector not initialized")
 	}
 	face, ok := detectPrimaryFace(img)
@@ -162,7 +216,7 @@ func SetMasterFace(img image.Image) error {
 // AnalyzeImage 单帧识别，返回 8 项监考结果
 func AnalyzeImage(img image.Image) DetectionResult {
 	result := DetectionResult{Codes: []int{}}
-	if !detectorReady {
+	if !IsDetectorReady() {
 		return result
 	}
 

@@ -9,7 +9,7 @@
 - `face_rec.onnx`
 
 Windows：`scripts/download-deps.ps1`  
-macOS：需先有上述三个文件（可在 Windows 跑 ps1，或在 Mac 上导出）
+macOS：`scripts/download-deps-darwin.sh`（自动导出 YOLO + 下载人脸模型；需 Python/`ultralytics`）
 
 ## 平台原生库
 

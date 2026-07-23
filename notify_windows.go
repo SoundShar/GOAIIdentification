@@ -18,7 +18,7 @@ const (
 )
 
 func showServiceStartedNotice() {
-	title, err := syscall.UTF16PtrFromString("yks-tool")
+	title, err := syscall.UTF16PtrFromString("考试服务工具")
 	if err != nil {
 		return
 	}

@@ -20,11 +20,11 @@
   },
   "StringFileInfo": {
     "Comments": "",
-    "CompanyName": "com.seaskylight.yksmacos",
+    "CompanyName": "com.seaskylight.ykstool",
     "FileDescription": "考试服务工具",
     "FileVersion": "1.0.0.0",
     "InternalName": "yks-tool",
-    "LegalCopyright": "com.seaskylight.yksmacos",
+    "LegalCopyright": "com.seaskylight.ykstool",
     "LegalTrademarks": "",
     "OriginalFilename": "yks-tool.exe",
     "PrivateBuild": "",

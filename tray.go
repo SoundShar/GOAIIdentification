@@ -26,7 +26,12 @@ func trayIconData() []byte {
 
 func onTrayReady() {
 	systray.SetIcon(trayIconData())
-	systray.SetTitle("yks-tool")
+	// macOS 菜单栏只显示图标；Windows 托盘标题用中文显示名
+	if runtime.GOOS == "darwin" {
+		systray.SetTitle("")
+	} else {
+		systray.SetTitle("考试服务工具")
+	}
 	systray.SetTooltip("考试服务工具运行中")
 
 	quitItem := systray.AddMenuItem("退出", "关闭本地服务")

@@ -10,8 +10,8 @@
 - **AI 图片识别**：`POST /api/upload` 返回无人/多人/换人/转头/低头/范围/书籍/手机
 - **基准人脸**：`POST /api/init` 设置换人比对基准脸
 - **健康检查**：`GET /api/health`
-- **请求日志**：`logs/app.log`
-- **系统托盘退出**
+- **请求日志**：macOS `~/Library/Logs/yks-tool/app.log`；Windows `%LOCALAPPDATA%\yks-tool\logs\app.log`
+- **系统托盘 / 菜单栏退出**
 
 ## 环境要求
 
@@ -44,24 +44,33 @@ go run .
 ### 3. macOS 打包（须在 Mac 上执行）
 
 ```bash
-chmod +x scripts/build-darwin.sh scripts/download-deps-darwin.sh
+chmod +x scripts/build-darwin.sh scripts/download-deps-darwin.sh scripts/sign-notarize-darwin.sh
 ./scripts/build-darwin.sh
-# 产物：
-#   build/yks-tool-darwin-arm64  （Apple Silicon）
-#   build/yks-tool-darwin-amd64  （Intel Mac）
+# 产物：build/yks-tool.app（Universal，未签名）
+# 中间：build/yks-tool-darwin-arm64|amd64|universal
+open build/yks-tool.app
 ```
 
-需先有 `embeddata/*.onnx`（可在 Windows 跑 `download-deps.ps1` 后拷贝，或在 Mac 上导出）。脚本会下载各架构 `libonnxruntime.dylib` 并分别打入对应二进制。
+正式分发（签名 + 公证；默认复用 it-ogt-pc-mac 的 Developer ID / notary profile）：
+
+```bash
+# 可选覆盖；不设则默认：
+#   YKS_APPLE_IDENTITY='BBAB30F5901351F4F769DFEEF702BAF26CE968C4'  # 证书 SHA-1，避免同名 ambiguous
+#   YKS_NOTARY_PROFILE='com.seaskylight.yksmacos'   # 与 Electron 考试端共用钥匙串 profile
+./scripts/sign-notarize-darwin.sh
+# 产物：build/yks-tool-macos.zip（内含公证并 staple 的 yks-tool.app）
+```
+
+`build-darwin.sh` 会调用 `download-deps-darwin.sh` 自动准备 `embeddata/*.onnx` 与各架构 `libonnxruntime.dylib`（YOLO 导出需本机 Python + `ultralytics`），再 `lipo` 合成 Universal 并组装 `.app`（Bundle ID：`com.seaskylight.ykstool`）。安装：解压 zip 后拖到「应用程序」或直接打开。
 
 ## 产物对照
 
 | 平台 | 产物 | 内嵌原生库 |
 |------|------|------------|
 | Windows x64 | `build/yks-tool.exe` | `onnxruntime.dll` |
-| macOS arm64 | `build/yks-tool-darwin-arm64` | ARM64 `libonnxruntime.dylib` |
-| macOS amd64 | `build/yks-tool-darwin-amd64` | x86_64 `libonnxruntime.dylib` |
+| macOS Universal | `build/yks-tool.app` / `build/yks-tool-macos.zip` | 各切片嵌入对应 `libonnxruntime.dylib` |
 
-一套源码，**各平台单独编译**；不可用一个 exe 跨 Win/Mac。
+一套源码，**各平台单独编译**；不可用一个 exe 跨 Win/Mac。macOS 最低系统 12.0，菜单栏常驻（`LSUIElement`）。
 
 ## API 摘要
 
@@ -109,14 +118,16 @@ aiWeb/
 ├── assets_embed_darwin_arm64.go   # build tag: darwin && arm64
 ├── assets_embed_darwin_amd64.go   # build tag: darwin && amd64
 ├── assets_embed_tls.go
-├── versioninfo.json     # Windows 文件版本
+├── versioninfo.json     # Windows 文件版本（CompanyName=com.seaskylight.ykstool）
+├── packaging/macos/     # Info.plist / entitlements / AppIcon.icns
 ├── ssl/                 # TLS 证书源文件（构建时复制到 embeddata/ssl/）
 ├── embeddata/           # 构建用嵌入资源（download-deps 生成，打入二进制）
 ├── scripts/
 │   ├── download-deps.ps1
 │   ├── download-deps-darwin.sh
 │   ├── build-windows.ps1
-│   └── build-darwin.sh
+│   ├── build-darwin.sh
+│   └── sign-notarize-darwin.sh
 ├── docs/
 └── build/               # 打包产物
 ```

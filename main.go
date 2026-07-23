@@ -12,10 +12,13 @@ func main() {
 		panic(err)
 	}
 
+	// 模型加载较慢：放到后台，先拉起 HTTPS 与托盘，缩短点击启动的体感时间
 	if os.Getenv("YKS_SKIP_DETECTOR") != "1" {
-		if err := InitDetector(); err != nil {
-			getLogger().Error("detector_init_failed", "error", err.Error())
-		}
+		go func() {
+			if err := InitDetector(); err != nil {
+				getLogger().Error("detector_init_failed", "error", err.Error())
+			}
+		}()
 	}
 
 	go func() {

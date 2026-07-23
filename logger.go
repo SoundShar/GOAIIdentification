@@ -5,13 +5,47 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 )
-
-const logDir = "logs"
 
 var appLogger *slog.Logger
 
+// resolveLogDir 返回可写日志目录：
+// macOS: ~/Library/Logs/yks-tool
+// Windows: %LOCALAPPDATA%\yks-tool\logs
+// 其它: ~/.local/share/yks-tool/logs
+func resolveLogDir() (string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, "Library", "Logs", "yks-tool"), nil
+	case "windows":
+		base := os.Getenv("LOCALAPPDATA")
+		if base == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			base = filepath.Join(home, "AppData", "Local")
+		}
+		return filepath.Join(base, "yks-tool", "logs"), nil
+	default:
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, ".local", "share", "yks-tool", "logs"), nil
+	}
+}
+
 func initLogger(console bool) error {
+	logDir, err := resolveLogDir()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return err
 	}

@@ -17,11 +17,13 @@ curl -k https://local.sharas.cn:7986/api/health
 
 ## GET /api/health
 
-健康检查。
+健康检查。`detector` 表示识别引擎状态：`ready` / `loading` / `error` / `skipped`。
 
 ```json
-{ "status": "ok", "version": "1.0.0" }
+{ "status": "ok", "version": "1.0.0", "detector": "ready" }
 ```
+
+服务启动后 HTTPS 会立即可用，模型在后台加载；`detector` 为 `loading` 时请稍后重试识别接口。
 
 ## POST /api/init
 
@@ -37,7 +39,7 @@ curl -k https://local.sharas.cn:7986/api/health
 { "ok": true, "message": "master face initialized" }
 ```
 
-失败：400（未检测到人脸、格式错误等）
+失败：400（未检测到人脸、格式错误等）；503（模型仍在加载或初始化失败）
 
 ## POST /api/upload
 
@@ -46,6 +48,8 @@ curl -k https://local.sharas.cn:7986/api/health
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `image` | file | 是 | JPEG/PNG，最大 10MB |
+
+模型未就绪时返回 503（勿把空 detection 当作正常结果）。
 
 成功示例：
 

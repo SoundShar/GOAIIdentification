@@ -1,3 +1,9 @@
+# Python venv (macOS model export)
+.venv/
+venv/
+yolo11n.pt
+yolo11n.onnx
+
 # Logs
 logs
 .trae/
@@ -84,6 +90,13 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+# macOS app / notarize artifacts (build/ already ignored; explicit for clarity)
+build/*.app/
+build/yks-tool-macos.zip
+build/yks-tool-macos-notarize.zip
+packaging/macos/AppIcon.iconset/
+packaging/macos/_icon_work.png
 
 # Webpack
 .webpack/

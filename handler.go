@@ -18,8 +18,9 @@ const (
 )
 
 type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
+	Status   string `json:"status"`
+	Version  string `json:"version"`
+	Detector string `json:"detector"`
 }
 
 type uploadResponse struct {
@@ -95,8 +96,9 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:  "ok",
-		Version: appVersion,
+		Status:   "ok",
+		Version:  appVersion,
+		Detector: DetectorStatus(),
 	})
 }
 
@@ -139,12 +141,30 @@ type formatError struct{}
 
 func (e *formatError) Error() string { return "unsupported image format" }
 
+func ensureDetectorReady(w http.ResponseWriter) bool {
+	if IsDetectorReady() {
+		return true
+	}
+	message := "detector is still loading, please retry shortly"
+	if err := DetectorInitError(); err != nil {
+		message = "detector unavailable: " + err.Error()
+	}
+	writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+		OK:      false,
+		Message: message,
+	})
+	return false
+}
+
 func handleInit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
 			OK:      false,
 			Message: "method not allowed",
 		})
+		return
+	}
+	if !ensureDetectorReady(w) {
 		return
 	}
 
@@ -195,6 +215,9 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 			OK:      false,
 			Message: "method not allowed",
 		})
+		return
+	}
+	if !ensureDetectorReady(w) {
 		return
 	}
 
