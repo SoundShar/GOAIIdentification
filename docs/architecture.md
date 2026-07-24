@@ -25,7 +25,7 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 | `main.go` | 入口：日志、检测器异步初始化；**CA/提权+Listen 成功后再弹启动提示并进托盘** |
 | `server.go` | 路由与 HTTPS 服务生命周期 |
 | `handler.go` | `/api/health`、`/api/init`、`/api/upload` |
-| `detector.go` | **单文件** YOLO11 + 人脸 ONNX 推理与 8 项告警 |
+| `detector.go` / `detector_env.go` | YOLO11 + 人脸 ONNX 推理与 8 项告警；阈值「常量默认 + 环境变量覆盖」 |
 | `notice.go` / `notice_*.go` | 跨平台启动提示：HTTPS Listen 成功后弹原生对话框（成功/失败） |
 | `assets_embed_tls.go` | `publicServiceURL` + `loadTLSCertificate()` 入口 |
 | `tls_local_ca.go` | 本机 CA/叶子证目录、生成与复用 |
@@ -40,13 +40,26 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 POST /api/upload (image)
   → JPEG/PNG 解码
   → detector.AnalyzeImage
-       ├─ YOLO11：person 计数、book、cell phone/remote
-       └─ 单人时 YuNet：低头/转头/越界
-            └─ w600k_mbf：与 /api/init 基准 embedding 比对（换人）
+       ├─ YOLO11：person 计数、book、cell phone / remote（分阈值，均映射 findPhonePC）
+       └─ 单人时 YuNet：低头/转头/围栏（容差外扩）
+            └─ 未低头/转头时 w600k_mbf：与 /api/init 基准 embedding 比对（换人）
   → JSON detection + codes
 ```
 
 基准人脸：`POST /api/init` 上传 `master_face`，embedding 存于进程内存，重启后需重新设置。
+
+## 检测阈值
+
+行为码与告警字段对齐 [aiIdentification](d:\dev\aiIdentification) `src/yolo/meta.ts`。阈值采用**常量默认值 + 可选环境变量覆盖**（见 `docs/build.md`），未设置环境变量时与历史硬编码行为一致（零回归结构修复）：
+
+| 判定 | 默认 | 说明 |
+|------|------|------|
+| YOLO person / phone / remote / book | `0.2` | 各类别可独立覆盖；人数仍为 `personCount<1` 无人、`>1` 多人（不拆两档阈值） |
+| 电子围栏容差 | `0.03` | 相对围栏宽高外扩后再比脸框四角 |
+| 低头 / 转头 | pitch`<-9`；yaw/roll/pitch 上限同历史 | 已低头或转头时跳过换人比对 |
+| 换人相似度 | `0.4` | 余弦相似度低于阈值判换人 |
+
+Debug 埋点：`yolo_scores`（仅 person / cell phone / remote / book 的原始分）、`head_pose`（pitch/yaw/roll）；`AIWEB_CONSOLE=1` 时日志级别为 Debug 可采集。
 
 ## 模型与运行时
 
@@ -64,4 +77,4 @@ POST /api/upload (image)
 
 ## 参考
 
-检测阈值与行为码对齐 [aiIdentification](d:\dev\aiIdentification) `src/yolo/meta.ts`。
+行为码与前端告警键对齐 [aiIdentification](d:\dev\aiIdentification) `src/yolo/meta.ts`；具体阈值数值以本仓库默认值与环境变量为准，不强制对齐外部 Python 项目。

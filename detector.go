@@ -13,7 +13,6 @@ import (
 
 const (
 	yoloInputSize      = 640
-	yoloScoreThreshold = 0.2
 	yoloIouThreshold   = 0.45
 	fenceWidthRatio    = 0.8
 	fenceHeightRatio   = 0.8
@@ -122,6 +121,8 @@ func DetectorStatus() string {
 
 // InitDetector 从嵌入资源加载 ONNX 模型（可异步调用）
 func InitDetector() error {
+	loadDetectorThresholds()
+
 	ortPath, err := materializeOrtLib()
 	if err != nil {
 		setDetectorInitErr(err)
@@ -232,7 +233,9 @@ func AnalyzeImage(img image.Image) DetectionResult {
 			personCount++
 		case "book":
 			result.Flags.FindBookPC = true
-		case "cell phone", "remote":
+		case "cell phone":
+			result.Flags.FindPhonePC = true
+		case "remote":
 			result.Flags.FindPhonePC = true
 		}
 	}
@@ -311,12 +314,19 @@ func runYolo(img image.Image, width, height int) []string {
 	boxes = nms(boxes, yoloIouThreshold)
 	names := []string{}
 	for _, box := range boxes {
-		if box.score < yoloScoreThreshold {
+		if box.classID < 0 || box.classID >= len(cocoLabels) {
 			continue
 		}
-		if box.classID >= 0 && box.classID < len(cocoLabels) {
-			names = append(names, cocoLabels[box.classID])
+		name := cocoLabels[box.classID]
+		threshold, ok := yoloThresholdForClass(name)
+		if !ok {
+			continue
 		}
+		getLogger().Debug("yolo_scores", "class", name, "score", box.score)
+		if box.score < threshold {
+			continue
+		}
+		names = append(names, name)
 	}
 	return names
 }
@@ -366,7 +376,7 @@ func parseYoloOutput(data []float32, numPred int, scale, padX, padY float32, wid
 				bestClass = c
 			}
 		}
-		if bestScore < yoloScoreThreshold {
+		if bestScore < yoloParseScoreFloor() {
 			continue
 		}
 		cx := data[0*numPred+i]
@@ -556,17 +566,17 @@ func decodeYuNetFaces(tensors [][]float32, strides []int) []faceLandmarks {
 			koff := idx * 10
 			face := faceLandmarks{
 				x: x1, y: y1, w: x2 - x1, h: y2 - y1,
-				rightEyeX: cx + kps[koff]*float32(stride),
-				rightEyeY: cy + kps[koff+1]*float32(stride),
-				leftEyeX:  cx + kps[koff+2]*float32(stride),
-				leftEyeY:  cy + kps[koff+3]*float32(stride),
-				noseX:     cx + kps[koff+4]*float32(stride),
-				noseY:     cy + kps[koff+5]*float32(stride),
+				rightEyeX:   cx + kps[koff]*float32(stride),
+				rightEyeY:   cy + kps[koff+1]*float32(stride),
+				leftEyeX:    cx + kps[koff+2]*float32(stride),
+				leftEyeY:    cy + kps[koff+3]*float32(stride),
+				noseX:       cx + kps[koff+4]*float32(stride),
+				noseY:       cy + kps[koff+5]*float32(stride),
 				rightMouthX: cx + kps[koff+6]*float32(stride),
 				rightMouthY: cy + kps[koff+7]*float32(stride),
 				leftMouthX:  cx + kps[koff+8]*float32(stride),
 				leftMouthY:  cy + kps[koff+9]*float32(stride),
-				score: score,
+				score:       score,
 			}
 			faces = append(faces, face)
 		}
@@ -617,9 +627,13 @@ func faceIoU(a, b faceLandmarks) float32 {
 
 func runPortraitChecks(img image.Image, face faceLandmarks, width, height int, flags *DetectionFlags) {
 	pitch, yaw, roll := estimateHeadPose(face)
-	if pitch < -9 {
+	getLogger().Debug("head_pose", "pitch", pitch, "yaw", yaw, "roll", roll)
+
+	if pitch < lowerHeadPitchThresh {
 		flags.LowerHeadPC = true
-	} else if yaw < -50 || yaw > 50 || roll < -25 || roll > 25 || pitch > 15 {
+	} else if yaw < -turnHeadYawAbsThresh || yaw > turnHeadYawAbsThresh ||
+		roll < -turnHeadRollAbsThresh || roll > turnHeadRollAbsThresh ||
+		pitch > turnHeadPitchMaxThresh {
 		flags.TurnheadPC = true
 	}
 
@@ -627,6 +641,13 @@ func runPortraitChecks(img image.Image, face faceLandmarks, width, height int, f
 	fenceY := float32(height) * (1 - fenceHeightRatio) / 2
 	fenceW := float32(width) * fenceWidthRatio
 	fenceH := float32(height) * fenceHeightRatio
+	// 等比例外扩围栏后再比脸框四角，避免零容差抖动误报
+	tolX := fenceW * fenceTolerance
+	tolY := fenceH * fenceTolerance
+	fenceMinX := fenceX - tolX
+	fenceMinY := fenceY - tolY
+	fenceMaxX := fenceX + fenceW + tolX
+	fenceMaxY := fenceY + fenceH + tolY
 
 	corners := [][2]float32{
 		{face.x, face.y},
@@ -635,10 +656,15 @@ func runPortraitChecks(img image.Image, face faceLandmarks, width, height int, f
 		{face.x + face.w, face.y + face.h},
 	}
 	for _, pt := range corners {
-		if pt[0] < fenceX || pt[0] > fenceX+fenceW || pt[1] < fenceY || pt[1] > fenceY+fenceH {
+		if pt[0] < fenceMinX || pt[0] > fenceMaxX || pt[1] < fenceMinY || pt[1] > fenceMaxY {
 			flags.RangeTestPC = true
 			break
 		}
+	}
+
+	// 低头/转头时特征不稳定，跳过换人比对避免误报
+	if flags.LowerHeadPC || flags.TurnheadPC {
+		return
 	}
 
 	detectorMu.RLock()
