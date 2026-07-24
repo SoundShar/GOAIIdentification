@@ -10,7 +10,7 @@ APP_NAME="yks-tool"
 APP_BUNDLE="build/${APP_NAME}.app"
 VERSION="${YKS_VERSION:-1.0.0}"
 PACKAGING_DIR="packaging/macos"
-ICON_SRC="assets/icon.png"
+ICON_SRC="assets/icon.icns"
 ICNS_OUT="${PACKAGING_DIR}/AppIcon.icns"
 
 export MACOSX_DEPLOYMENT_TARGET=12.0
@@ -21,42 +21,14 @@ chmod +x scripts/download-deps-darwin.sh
 
 mkdir -p build
 
-generate_app_icon() {
+copy_app_icon() {
   if [[ ! -f "$ICON_SRC" ]]; then
     echo "error: missing icon source: $ICON_SRC" >&2
     exit 1
   fi
-  if ! command -v sips >/dev/null 2>&1 || ! command -v iconutil >/dev/null 2>&1; then
-    if [[ -f "$ICNS_OUT" ]]; then
-      echo "warning: sips/iconutil unavailable, using existing $ICNS_OUT"
-      return 0
-    fi
-    echo "error: sips/iconutil required to generate AppIcon.icns" >&2
-    exit 1
-  fi
-
-  local tmp_dir iconset work_png
-  tmp_dir="$(mktemp -d)"
-  iconset="${tmp_dir}/AppIcon.iconset"
-  work_png="${tmp_dir}/icon-1024.png"
-  mkdir -p "$iconset"
-
-  # 统一为 72 DPI，避免源图高 DPI 导致 iconutil 报 Invalid Iconset
-  sips -s format png -z 1024 1024 "$ICON_SRC" --out "$work_png" >/dev/null
-  sips -s dpiWidth 72 -s dpiHeight 72 "$work_png" >/dev/null
-
-  local size
-  for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" "$work_png" --out "${iconset}/icon_${size}x${size}.png" >/dev/null
-    sips -z $((size * 2)) $((size * 2)) "$work_png" --out "${iconset}/icon_${size}x${size}@2x.png" >/dev/null
-    sips -s dpiWidth 72 -s dpiHeight 72 "${iconset}/icon_${size}x${size}.png" >/dev/null
-    sips -s dpiWidth 72 -s dpiHeight 72 "${iconset}/icon_${size}x${size}@2x.png" >/dev/null
-  done
-
-  xattr -cr "$iconset" 2>/dev/null || true
-  iconutil -c icns "$iconset" -o "$ICNS_OUT"
-  rm -rf "$tmp_dir"
-  echo "Generated $ICNS_OUT"
+  mkdir -p "$PACKAGING_DIR"
+  cp -f "$ICON_SRC" "$ICNS_OUT"
+  echo "Copied $ICON_SRC -> $ICNS_OUT"
 }
 
 echo "Building ${APP_NAME}-darwin-arm64 (MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET})..."
@@ -75,7 +47,7 @@ lipo -create \
   "build/${APP_NAME}-darwin-arm64" \
   "build/${APP_NAME}-darwin-amd64"
 
-generate_app_icon
+copy_app_icon
 
 echo "Assembling ${APP_BUNDLE}..."
 rm -rf "$APP_BUNDLE"

@@ -25,7 +25,7 @@
 - macOS：clang + `download-deps-darwin.sh` + `build-darwin.sh`（须在 Mac 上执行）；正式包再跑 `sign-notarize-darwin.sh`
 - `MACOSX_DEPLOYMENT_TARGET=12.0`；Universal 用 `lipo`
 - 嵌入拆分：`assets_embed_common.go` + 平台 build tag 文件
-- App 模板：`packaging/macos/`（Info.plist、entitlements、AppIcon.icns）
+- App 模板：`packaging/macos/`（Info.plist、entitlements、AppIcon.icns；图标源 `assets/icon.icns`）
 
 ## 启动提示 UI
 

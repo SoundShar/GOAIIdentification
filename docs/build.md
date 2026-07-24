@@ -99,7 +99,8 @@ curl https://local.cetset.com:7986/api/health
 ### 环境
 
 - **须在 macOS 上编译**（systray + CGO）
-- Xcode Command Line Tools（`clang`、`lipo`、`sips`、`iconutil`；正式包另需 `codesign` / `notarytool`）
+- Xcode Command Line Tools（`clang`、`lipo`；正式包另需 `codesign` / `notarytool`）
+- App 图标源：`assets/icon.icns`（构建时复制为 `packaging/macos/AppIcon.icns`）
 - Python 3 + 项目 `.venv`（推荐：`python3 -m venv .venv && .venv/bin/pip install ultralytics onnx`；首次导出 `yolo11.onnx`；人脸模型由脚本直接下载）
 
 ### 开发包（未签名）
@@ -117,7 +118,7 @@ open build/yks-tool.app
 1. `download-deps-darwin.sh` 导出/下载三个 ONNX 模型，并下载各架构 `libonnxruntime.dylib`
 2. `MACOSX_DEPLOYMENT_TARGET=12.0` 下分别编译 arm64 / amd64
 3. `lipo` 合成 Universal 二进制
-4. 从 `assets/icon.png` 生成/刷新 `AppIcon.icns`
+4. 复制 `assets/icon.icns` → `packaging/macos/AppIcon.icns`（不再从 png 生成）
 5. 组装 `build/yks-tool.app`（TLS 本机 CA 运行时生成，无需构建期 ssl 嵌入）
 6. 删除 `build/yks-tool-darwin-{arm64,amd64,universal}` 中间二进制
 
