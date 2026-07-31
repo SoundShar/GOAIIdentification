@@ -61,8 +61,13 @@ func initLogger(console bool) error {
 		writers = append(writers, os.Stdout)
 	}
 
+	// AIWEB_CONSOLE=1 时开放 Debug，便于采集 yolo_scores / head_pose 等埋点
+	level := slog.LevelInfo
+	if console {
+		level = slog.LevelDebug
+	}
 	handler := slog.NewTextHandler(io.MultiWriter(writers...), &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: level,
 	})
 	appLogger = slog.New(handler)
 	slog.SetDefault(appLogger)

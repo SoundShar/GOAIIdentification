@@ -681,58 +681,8 @@ func runPortraitChecks(img image.Image, face faceLandmarks, flags *DetectionFlag
 
 	if face.score < faceChangeQualityThreshold {
 		getLogger().Info("change_person_skipped_low_quality", "face_score", face.score, "threshold", faceChangeQualityThreshold)
-		return
-	}
-
-	detectorMu.RLock()
-	master := masterEmbedding
-	detectorMu.RUnlock()
-	if len(master) == 0 {
-		return
-	}
-	emb, err := extractFaceEmbedding(img, face)
-	if err != nil {
-		return
-	}
-	if cosineSimilarity(master, emb) < faceMatchThreshold {
-		flags.ChangePersonPC = true
-	}
-}
-
-func estimateHeadPose(face faceLandmarks) (pitch, yaw float32) {
-	eyeMidX := (face.leftEyeX + face.rightEyeX) / 2
-	eyeMidY := (face.leftEyeY + face.rightEyeY) / 2
-	eyeDistance := float32(math.Abs(float64(face.rightEyeX - face.leftEyeX)))
-	if eyeDistance < 1 {
-		return 0, 0
-	}
-
-	// 对齐 calculate_yaw：水平眼距归一化
-	yaw = (face.noseX - eyeMidX) / eyeDistance * 90
-
-	// 对齐 calculate_pitch：嘴-眼垂直距 / 水平眼距
-	mouthMidY := (face.rightMouthY + face.leftMouthY) / 2
-	normalizedVertical := (mouthMidY - eyeMidY) / eyeDistance
-	pitch = (normalizedVertical - 1.1) * 45 * 2
-	return pitch, yaw
-}
-
-func extractFaceEmbedding(img image.Image, face faceLandmarks) ([]float32, error) {
-	crop := alignFaceCrop(img, face)
-	tensorData := imageToNCHWNormalized(crop, 112, 112)
-	inputShape := ort.NewShape(1, 3, 112, 112)
-	inputTensor, err := ort.NewTensor(inputShape, tensorData)
-	if err != nil {
-		return nil, err
-	}
-	defer inputTensor.Destroy()
-
-	outputShape := ort.NewShape(1, 512)
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return nil, err
-	}
-	defer outputTensor.Destroy()
+TurnheadPC {
+ensor.Destroy()
 
 	if err := faceRecSess.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
 		return nil, err

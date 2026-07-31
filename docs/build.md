@@ -99,7 +99,8 @@ curl https://local.cetset.com:7986/api/health
 ### 环境
 
 - **须在 macOS 上编译**（systray + CGO）
-- Xcode Command Line Tools（`clang`、`lipo`、`sips`、`iconutil`；正式包另需 `codesign` / `notarytool`）
+- Xcode Command Line Tools（`clang`、`lipo`；正式包另需 `codesign` / `notarytool`）
+- App 图标源：`assets/icon.icns`（构建时复制为 `packaging/macos/AppIcon.icns`）
 - Python 3 + 项目 `.venv`（推荐：`python3 -m venv .venv && .venv/bin/pip install ultralytics onnx`；首次导出 `yolo11.onnx`；人脸模型由脚本直接下载）
 
 ### 开发包（未签名）
@@ -117,7 +118,7 @@ open build/yks-tool.app
 1. `download-deps-darwin.sh` 导出/下载三个 ONNX 模型，并下载各架构 `libonnxruntime.dylib`
 2. `MACOSX_DEPLOYMENT_TARGET=12.0` 下分别编译 arm64 / amd64
 3. `lipo` 合成 Universal 二进制
-4. 从 `assets/icon.png` 生成/刷新 `AppIcon.icns`
+4. 复制 `assets/icon.icns` → `packaging/macos/AppIcon.icns`（不再从 png 生成）
 5. 组装 `build/yks-tool.app`（TLS 本机 CA 运行时生成，无需构建期 ssl 嵌入）
 6. 删除 `build/yks-tool-darwin-{arm64,amd64,universal}` 中间二进制
 
@@ -191,7 +192,16 @@ go run .
 | `YKS_SKIP_DETECTOR` | `1` 时跳过模型加载 |
 | `YKS_HTTP_ONLY` | `1` 时跳过本机 CA/提权，以 HTTP 启动（开发调试，默认 HTTPS） |
 | `YKS_CORS_ORIGIN` | 可选，覆盖内置 CORS 白名单（逗号分隔）；默认已内置考试页域名 |
-| `AIWEB_CONSOLE` | `1` 时日志输出控制台 |
+| `AIWEB_CONSOLE` | `1` 时日志输出控制台，并将日志级别降至 Debug（可见 `yolo_scores` / `head_pose` 埋点） |
+| `YKS_YOLO_PERSON_THRESHOLD` | 可选，YOLO `person` 置信度阈值，默认 `0.2`（有人/多人共用同一阈值） |
+| `YKS_YOLO_PHONE_THRESHOLD` | 可选，YOLO `cell phone` 置信度阈值，默认 `0.2` |
+| `YKS_YOLO_REMOTE_THRESHOLD` | 可选，YOLO `remote` 置信度阈值，默认 `0.2`（与手机分阈值，仍映射 `findPhonePC`） |
+| `YKS_YOLO_BOOK_THRESHOLD` | 可选，YOLO `book` 置信度阈值，默认 `0.2` |
+| `YKS_FENCE_TOLERANCE` | 可选，电子围栏等比例外扩容差（相对围栏宽高），默认 `0.03` |
+| `YKS_LOWER_HEAD_PITCH` | 可选，低头判定：`pitch` 低于该值，默认 `-9` |
+| `YKS_TURN_HEAD_YAW` | 可选，转头 yaw 绝对值上限，默认 `50` |
+| `YKS_TURN_HEAD_ROLL` | 可选，转头 roll 绝对值上限，默认 `25` |
+| `YKS_TURN_HEAD_PITCH_MAX` | 可选，转头 pitch 上限，默认 `15` |
 | `YKS_VERSION` | macOS 构建时写入 `CFBundleShortVersionString` / `CFBundleVersion`，默认 `1.0.0` |
 | `YKS_APPLE_IDENTITY` | 正式签名身份；默认证书 SHA-1 `BBAB30F5…`（SeaSkyLight `BVU65MZFLK`，与 it-ogt-pc-mac 相同） |
 | `YKS_NOTARY_PROFILE` | `notarytool` keychain profile；默认 `com.seaskylight.yksmacos`（与 Electron 考试端共用） |
