@@ -12,15 +12,20 @@ import (
 )
 
 const (
-	yoloInputSize      = 640
-	yoloScoreThreshold = 0.2
-	yoloIouThreshold   = 0.45
-	fenceWidthRatio    = 0.8
-	fenceHeightRatio   = 0.8
-	faceInputSize      = 640
-	faceScoreThreshold = 0.6
-	faceNmsThreshold   = 0.3
-	faceMatchThreshold = 0.4
+	yoloInputSize              = 640
+	yoloScoreThreshold         = 0.5
+	yoloIouThreshold           = 0.45
+	fenceMarginLeft            = 0.2
+	fenceMarginRight           = 0.2
+	fenceMarginTop             = 0.2
+	fenceMarginBottom          = 0.2
+	faceInputSize              = 640
+	faceScoreThreshold         = 0.6
+	faceNmsThreshold           = 0.3
+	faceMatchThreshold         = 0.4
+	faceChangeQualityThreshold = 0.7
+	lowerHeadPitchThreshold    = -20
+	turnHeadYawThreshold       = 30
 )
 
 const (
@@ -224,18 +229,10 @@ func AnalyzeImage(img image.Image) DetectionResult {
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	yoloHits := runYolo(img, width, height)
-	personCount := 0
-	for _, hit := range yoloHits {
-		switch hit {
-		case "person":
-			personCount++
-		case "book":
-			result.Flags.FindBookPC = true
-		case "cell phone", "remote":
-			result.Flags.FindPhonePC = true
-		}
-	}
+	yoloDet := runYolo(img, width, height)
+	result.Flags.FindBookPC = yoloDet.findBook
+	result.Flags.FindPhonePC = yoloDet.findPhone
+	personCount := len(yoloDet.personBoxes)
 
 	if personCount < 1 {
 		result.Flags.NobodyPC = true
@@ -244,10 +241,16 @@ func AnalyzeImage(img image.Image) DetectionResult {
 		result.Flags.MultiplePersonPC = true
 	}
 
+	// 单人：用五关键点相对四边 0.2 内框判越界（不用全身框，避免举手挡脸等误报）
+	// 越界只报 rangeTest，不跑低头/转头/换人；未检出脸则不做姿态与换人
 	if personCount == 1 {
 		face, ok := detectPrimaryFace(img)
 		if ok {
-			runPortraitChecks(img, face, width, height, &result.Flags)
+			if isFaceOutsideFence(face, width, height) {
+				result.Flags.RangeTestPC = true
+			} else {
+				runPortraitChecks(img, face, &result.Flags)
+			}
 		}
 	}
 
@@ -284,13 +287,20 @@ func flagsToCodes(flags DetectionFlags) []int {
 	return codes
 }
 
-func runYolo(img image.Image, width, height int) []string {
+type yoloDetection struct {
+	personBoxes []yoloBox
+	findBook    bool
+	findPhone   bool
+}
+
+func runYolo(img image.Image, width, height int) yoloDetection {
+	var det yoloDetection
 	tensorData, scale, padX, padY := letterboxToTensor(img, width, height, yoloInputSize, true)
 	inputShape := ort.NewShape(1, 3, yoloInputSize, yoloInputSize)
 	inputTensor, err := ort.NewTensor(inputShape, tensorData)
 	if err != nil {
 		getLogger().Warn("yolo_input_tensor_failed", "error", err.Error())
-		return nil
+		return det
 	}
 	defer inputTensor.Destroy()
 
@@ -298,27 +308,55 @@ func runYolo(img image.Image, width, height int) []string {
 	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
 	if err != nil {
 		getLogger().Warn("yolo_output_tensor_failed", "error", err.Error())
-		return nil
+		return det
 	}
 	defer outputTensor.Destroy()
 
 	if err := yoloSession.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
 		getLogger().Warn("yolo_run_failed", "error", err.Error())
-		return nil
+		return det
 	}
 
 	boxes := parseYoloOutput(outputTensor.GetData(), 8400, scale, padX, padY, width, height)
 	boxes = nms(boxes, yoloIouThreshold)
-	names := []string{}
 	for _, box := range boxes {
 		if box.score < yoloScoreThreshold {
 			continue
 		}
-		if box.classID >= 0 && box.classID < len(cocoLabels) {
-			names = append(names, cocoLabels[box.classID])
+		if box.classID < 0 || box.classID >= len(cocoLabels) {
+			continue
+		}
+		switch cocoLabels[box.classID] {
+		case "person":
+			det.personBoxes = append(det.personBoxes, box)
+		case "book":
+			det.findBook = true
+		case "cell phone", "remote":
+			det.findPhone = true
 		}
 	}
-	return names
+	return det
+}
+
+// isFaceOutsideFence 五关键点（左右眼、鼻、左右嘴）任一点落在四边 0.2 内框外则视为越界
+func isFaceOutsideFence(face faceLandmarks, width, height int) bool {
+	fenceX := float32(width) * fenceMarginLeft
+	fenceY := float32(height) * fenceMarginTop
+	fenceRight := float32(width) * (1 - fenceMarginRight)
+	fenceBottom := float32(height) * (1 - fenceMarginBottom)
+	keypoints := [][2]float32{
+		{face.leftEyeX, face.leftEyeY},
+		{face.rightEyeX, face.rightEyeY},
+		{face.noseX, face.noseY},
+		{face.leftMouthX, face.leftMouthY},
+		{face.rightMouthX, face.rightMouthY},
+	}
+	for _, pt := range keypoints {
+		if pt[0] < fenceX || pt[0] > fenceRight || pt[1] < fenceY || pt[1] > fenceBottom {
+			return true
+		}
+	}
+	return false
 }
 
 func letterboxToTensor(img image.Image, width, height, inputSize int, normalize bool) ([]float32, float32, float32, float32) {
@@ -556,17 +594,17 @@ func decodeYuNetFaces(tensors [][]float32, strides []int) []faceLandmarks {
 			koff := idx * 10
 			face := faceLandmarks{
 				x: x1, y: y1, w: x2 - x1, h: y2 - y1,
-				rightEyeX: cx + kps[koff]*float32(stride),
-				rightEyeY: cy + kps[koff+1]*float32(stride),
-				leftEyeX:  cx + kps[koff+2]*float32(stride),
-				leftEyeY:  cy + kps[koff+3]*float32(stride),
-				noseX:     cx + kps[koff+4]*float32(stride),
-				noseY:     cy + kps[koff+5]*float32(stride),
+				rightEyeX:   cx + kps[koff]*float32(stride),
+				rightEyeY:   cy + kps[koff+1]*float32(stride),
+				leftEyeX:    cx + kps[koff+2]*float32(stride),
+				leftEyeY:    cy + kps[koff+3]*float32(stride),
+				noseX:       cx + kps[koff+4]*float32(stride),
+				noseY:       cy + kps[koff+5]*float32(stride),
 				rightMouthX: cx + kps[koff+6]*float32(stride),
 				rightMouthY: cy + kps[koff+7]*float32(stride),
 				leftMouthX:  cx + kps[koff+8]*float32(stride),
 				leftMouthY:  cy + kps[koff+9]*float32(stride),
-				score: score,
+				score:       score,
 			}
 			faces = append(faces, face)
 		}
@@ -615,30 +653,35 @@ func faceIoU(a, b faceLandmarks) float32 {
 	return inter / union
 }
 
-func runPortraitChecks(img image.Image, face faceLandmarks, width, height int, flags *DetectionFlags) {
-	pitch, yaw, roll := estimateHeadPose(face)
-	if pitch < -9 {
+// runPortraitChecks 低头 / 转头 / 换人（越界已在 AnalyzeImage 用五关键点门禁处理）
+// 换人仅在无低头、无转头且人脸质量达标时检测；无人/多人/越界本就不会进入本函数
+func runPortraitChecks(img image.Image, face faceLandmarks, flags *DetectionFlags) {
+	pitch, yaw := estimateHeadPose(face)
+	if pitch > lowerHeadPitchThreshold {
 		flags.LowerHeadPC = true
-	} else if yaw < -50 || yaw > 50 || roll < -25 || roll > 25 || pitch > 15 {
+	}
+	if yaw < -turnHeadYawThreshold || yaw > turnHeadYawThreshold {
 		flags.TurnheadPC = true
 	}
 
-	fenceX := float32(width) * (1 - fenceWidthRatio) / 2
-	fenceY := float32(height) * (1 - fenceHeightRatio) / 2
-	fenceW := float32(width) * fenceWidthRatio
-	fenceH := float32(height) * fenceHeightRatio
+	yawTrigger := yaw < -turnHeadYawThreshold || yaw > turnHeadYawThreshold
+	getLogger().Info("head_pose",
+		"pitch", pitch,
+		"yaw", yaw,
+		"lower_head_threshold", lowerHeadPitchThreshold,
+		"lower_head", flags.LowerHeadPC,
+		"turn_head", flags.TurnheadPC,
+		"yaw_trigger", yawTrigger,
+	)
 
-	corners := [][2]float32{
-		{face.x, face.y},
-		{face.x + face.w, face.y},
-		{face.x, face.y + face.h},
-		{face.x + face.w, face.y + face.h},
+	// 低头或转头时不做换人比对（侧脸/俯仰会导致 embedding 不稳定）
+	if flags.LowerHeadPC || flags.TurnheadPC {
+		return
 	}
-	for _, pt := range corners {
-		if pt[0] < fenceX || pt[0] > fenceX+fenceW || pt[1] < fenceY || pt[1] > fenceY+fenceH {
-			flags.RangeTestPC = true
-			break
-		}
+
+	if face.score < faceChangeQualityThreshold {
+		getLogger().Info("change_person_skipped_low_quality", "face_score", face.score, "threshold", faceChangeQualityThreshold)
+		return
 	}
 
 	detectorMu.RLock()
@@ -656,27 +699,22 @@ func runPortraitChecks(img image.Image, face faceLandmarks, width, height int, f
 	}
 }
 
-func estimateHeadPose(face faceLandmarks) (pitch, yaw, roll float32) {
-	dx := face.rightEyeX - face.leftEyeX
-	dy := face.rightEyeY - face.leftEyeY
-	roll = float32(math.Atan2(float64(dy), float64(dx)) * 180 / math.Pi)
-
+func estimateHeadPose(face faceLandmarks) (pitch, yaw float32) {
 	eyeMidX := (face.leftEyeX + face.rightEyeX) / 2
 	eyeMidY := (face.leftEyeY + face.rightEyeY) / 2
-	interEye := float32(math.Hypot(float64(dx), float64(dy)))
-	if interEye < 1 {
-		return 0, 0, roll
+	eyeDistance := float32(math.Abs(float64(face.rightEyeX - face.leftEyeX)))
+	if eyeDistance < 1 {
+		return 0, 0
 	}
 
-	yaw = (face.noseX - eyeMidX) / interEye * 90
+	// 对齐 calculate_yaw：水平眼距归一化
+	yaw = (face.noseX - eyeMidX) / eyeDistance * 90
 
+	// 对齐 calculate_pitch：嘴-眼垂直距 / 水平眼距
 	mouthMidY := (face.rightMouthY + face.leftMouthY) / 2
-	denom := mouthMidY - eyeMidY
-	if math.Abs(float64(denom)) < 1 {
-		return 0, yaw, roll
-	}
-	pitch = (face.noseY-eyeMidY)/denom*45 - 10
-	return pitch, yaw, roll
+	normalizedVertical := (mouthMidY - eyeMidY) / eyeDistance
+	pitch = (normalizedVertical - 1.1) * 45 * 2
+	return pitch, yaw
 }
 
 func extractFaceEmbedding(img image.Image, face faceLandmarks) ([]float32, error) {

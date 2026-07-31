@@ -30,7 +30,7 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 | `assets_embed_tls.go` | `publicServiceURL` + `loadTLSCertificate()` 入口 |
 | `tls_local_ca.go` | 本机 CA/叶子证目录、生成与复用 |
 | `tls_trust_*.go` | 系统信任库检测与提权安装（硬失败） |
-| `middleware.go` | 请求日志、CORS、Private Network |
+| `middleware.go` | CORS、Private Network |
 | `tray.go` | 系统托盘 |
 | `logger.go` | slog 文件日志（macOS：`~/Library/Logs/yks-tool/`；Windows：`%LOCALAPPDATA%\yks-tool\logs\`） |
 
@@ -40,11 +40,15 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 POST /api/upload (image)
   → JPEG/PNG 解码
   → detector.AnalyzeImage
-       ├─ YOLO11：person 计数、book、cell phone/remote
-       └─ 单人时 YuNet：低头/转头/越界
-            └─ w600k_mbf：与 /api/init 基准 embedding 比对（换人）
+       ├─ YOLO11：person 计数 + person 框、book、cell phone/remote
+       ├─ 无人 / 多人：置对应标志，不进人脸管线
+       └─ 单人：
+            ├─ 五关键点相对四边 0.2 内框：任一点出界 → 仅 rangeTestPC（不跑低头/转头/换人）
+            └─ 关键点在围栏内 → 低头/转头 +（质量门后）w600k_mbf 换人比对
   → JSON detection + codes
 ```
+
+姿态阈值（`detector.go`）：低头 `pitch < -15`；转头 `|yaw| > 30`（独立判定，可同时触发；不做 roll）。越界认五关键点 × 四边 0.2 内框（不用 YOLO 全身框）。换人仅在单人、关键点在围栏内、无低头/转头且 `face.score >= 0.7` 时比对，相似度 `< 0.4` 报换人。
 
 基准人脸：`POST /api/init` 上传 `master_face`，embedding 存于进程内存，重启后需重新设置。
 

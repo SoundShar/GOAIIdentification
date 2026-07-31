@@ -261,14 +261,16 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	bounds := img.Bounds()
 	detection := AnalyzeImage(img)
 
-	getLogger().Info("upload_validated",
-		"filename", filename,
-		"content_type", contentType,
-		"width", bounds.Dx(),
-		"height", bounds.Dy(),
-		"size", size,
-		"codes", detection.Codes,
-	)
+	if len(detection.Codes) > 0 {
+		getLogger().Info("upload_validated",
+			"filename", filename,
+			"content_type", contentType,
+			"width", bounds.Dx(),
+			"height", bounds.Dy(),
+			"size", size,
+			"codes", detection.Codes,
+		)
+	}
 
 	writeJSON(w, http.StatusOK, uploadResponse{
 		OK:          true,

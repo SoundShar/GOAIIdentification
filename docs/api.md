@@ -85,9 +85,9 @@ curl https://local.cetset.com:7986/api/health
 | `multiplePersonPC` | 1002 | 多人 |
 | `findPhonePC` | 1003 | 疑似手机 |
 | `findBookPC` | 1004 | 疑似书籍 |
-| `changePersonPC` | 1005 | 疑似换人 |
-| `lowerHeadPC` | 2001 | 低头 |
-| `turnheadPC` | 2002 | 转头 |
-| `rangeTestPC` | 2003 | 人像不在检测框内（80% 居中区域） |
+| `changePersonPC` | 1005 | 疑似换人（无人/多人/越界/低头/转头/低质量脸时不检测；相似度 `< 0.4`） |
+| `lowerHeadPC` | 2001 | 低头（`pitch < -15`） |
+| `turnheadPC` | 2002 | 转头（`|yaw| > 30`） |
+| `rangeTestPC` | 2003 | 五关键点不在四边 0.2 内框内（越界时不报低头/转头/换人） |
 
 `codes` 为当前帧命中码列表。

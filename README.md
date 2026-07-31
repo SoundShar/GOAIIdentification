@@ -98,16 +98,18 @@ curl -X POST https://local.cetset.com:7986/api/upload -F "image=@photo.jpg"
 
 ### 行为码
 
-| code | 说明 |
-|------|------|
-| 1001 | 无人 |
-| 1002 | 多人 |
-| 1003 | 疑似手机 |
-| 1004 | 疑似书籍 |
-| 1005 | 疑似换人 |
-| 2001 | 低头 |
-| 2002 | 转头 |
-| 2003 | 越界（80% 居中框） |
+| code | 说明 | 模型 / 技术 |
+|------|------|-------------|
+| 1001 | 无人 | YOLO11（COCO `person` 计数 &lt; 1） |
+| 1002 | 多人 | YOLO11（COCO `person` 计数 &gt; 1） |
+| 1003 | 疑似手机 | YOLO11（`cell phone` / `remote`） |
+| 1004 | 疑似书籍 | YOLO11（`book`） |
+| 1005 | 疑似换人 | 单人且关键点在围栏内、无低头/转头、`face.score >= 0.7` 时：YuNet + InsightFace embedding 与 `/api/init` 基准比对（相似度 `< 0.4`） |
+| 2001 | 低头 | YuNet 关键点 + 头部姿态（`pitch < -15`） |
+| 2002 | 转头 | YuNet 关键点 + 头部姿态（`|yaw| > 30`；可与低头同时触发；不做 roll） |
+| 2003 | 越界（四边 0.2 内框） | 五关键点相对画面四边各 0.2 边距的居中内框；越界只报此项，跳过低头/转头/换人 |
+
+推理运行时：ONNX Runtime；模型内嵌于 exe（`yolo11.onnx` / `face_detect.onnx` / `face_rec.onnx`）。
 
 ## 项目结构
 

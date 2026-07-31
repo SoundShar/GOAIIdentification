@@ -21,7 +21,7 @@ func newMux() http.Handler {
 	mux.HandleFunc("/api/init", handleInit)
 	mux.HandleFunc("/api/upload", handleUpload)
 
-	return chainMiddleware(mux, loggingMiddleware, corsMiddleware)
+	return chainMiddleware(mux, corsMiddleware)
 }
 
 func startHTTPServer() error {
