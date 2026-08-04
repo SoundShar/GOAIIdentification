@@ -40,17 +40,11 @@ HTTPS 考试页（如 `videoVIew.html`）通过域名跨端口调用本服务；
 POST /api/upload (image)
   → JPEG/PNG 解码
   → detector.AnalyzeImage
-<<<<<<< HEAD
        ├─ YOLO11：person 计数 + person 框、book、cell phone/remote
        ├─ 无人 / 多人：置对应标志，不进人脸管线
        └─ 单人：
             ├─ 五关键点相对四边 0.2 内框：任一点出界 → 仅 rangeTestPC（不跑低头/转头/换人）
             └─ 关键点在围栏内 → 低头/转头 +（质量门后）w600k_mbf 换人比对
-=======
-       ├─ YOLO11：person 计数、book、cell phone / remote（分阈值，均映射 findPhonePC）
-       └─ 单人时 YuNet：低头/转头/围栏（容差外扩）
-            └─ 未低头/转头时 w600k_mbf：与 /api/init 基准 embedding 比对（换人）
->>>>>>> a71a7b02fa67222258f964cce1d495e89c7cb6ae
   → JSON detection + codes
 ```
 
